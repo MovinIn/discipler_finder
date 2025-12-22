@@ -1,0 +1,158 @@
+.partnerships-page {
+  min-height: calc(100vh - 70px);
+  padding: 4rem 1.5rem;
+}
+
+.partnerships-page .container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.partnerships-page h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #fff;
+  text-align: center;
+}
+
+.partnerships-intro {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: #d0d0d0;
+  text-align: center;
+  margin-bottom: 3rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.churches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 4rem;
+}
+
+.church-card {
+  background-color: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.church-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(100, 108, 255, 0.2);
+  border-color: #646cff;
+}
+
+.church-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #646cff 0%, #535bf2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  font-size: 2rem;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.3);
+}
+
+.church-name {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.church-location {
+  font-size: 0.95rem;
+  color: #646cff;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.church-description {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #c0c0c0;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.partnership-cta {
+  text-align: center;
+  padding: 3rem 2rem;
+  background-color: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.partnership-cta p {
+  font-size: 1.1rem;
+  color: #d0d0d0;
+  margin-bottom: 1.5rem;
+}
+
+.contact-btn {
+  padding: 0.875rem 2rem;
+  background-color: #646cff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.contact-btn:hover {
+  background-color: #535bf2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.4);
+}
+
+@media (max-width: 768px) {
+  .partnerships-page {
+    padding: 2rem 1.5rem;
+  }
+
+  .partnerships-page h1 {
+    font-size: 2rem;
+  }
+
+  .partnerships-intro {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .churches-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .church-card {
+    padding: 1.5rem;
+  }
+
+  .church-icon {
+    width: 70px;
+    height: 70px;
+    font-size: 1.75rem;
+  }
+
+  .partnership-cta {
+    padding: 2rem 1.5rem;
+  }
+}
+

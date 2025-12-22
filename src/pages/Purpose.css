@@ -1,0 +1,34 @@
+.purpose-page {
+  min-height: calc(100vh - 70px);
+  padding: 4rem 1.5rem;
+}
+
+.purpose-page .container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.purpose-page h1 {
+  font-size: 3rem;
+  margin-bottom: 2rem;
+  color: #fff;
+  text-align: center;
+}
+
+.purpose-content p {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: #d0d0d0;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .purpose-page {
+    padding: 2rem 1.5rem;
+  }
+
+  .purpose-page h1 {
+    font-size: 2rem;
+  }
+}
+
