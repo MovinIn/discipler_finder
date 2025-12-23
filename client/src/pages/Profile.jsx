@@ -6,7 +6,7 @@ function Profile() {
   const { profile, updateProfile } = useProfile()
   const [formData, setFormData] = useState({
     church: profile.church || '',
-    age: profile.age || '',
+    dateOfBirth: profile.dateOfBirth || '',
     gender: profile.gender || '',
     lookingFor: profile.lookingFor || '',
     future: profile.future || '',
@@ -28,7 +28,7 @@ function Profile() {
     // Load profile data when component mounts or profile changes
     setFormData({
       church: profile.church || '',
-      age: profile.age || '',
+      dateOfBirth: profile.dateOfBirth || '',
       gender: profile.gender || '',
       lookingFor: profile.lookingFor || '',
       future: profile.future || '',
@@ -36,7 +36,120 @@ function Profile() {
     })
   }, [profile])
 
+  const formatDateInput = (value) => {
+    // Check if input ends with a slash (user is trying to move to next section)
+    const endsWithSlash = value.endsWith('/')
+    
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '')
+    
+    // Limit to 8 digits (MMDDYYYY)
+    const limited = digits.slice(0, 8)
+    
+    // Format with slashes: MM/DD/YYYY
+    if (limited.length === 0) {
+      return ''
+    } else if (limited.length === 1) {
+      // Single digit month
+      if (endsWithSlash) {
+        // User typed "1/" - pad to "01/"
+        return `${limited.padStart(2, '0')}/`
+      }
+      return limited
+    } else if (limited.length === 2) {
+      // Two digits for month - pad if single digit, add slash
+      const month = limited.slice(0, 2).padStart(2, '0')
+      return `${month}/`
+    } else if (limited.length === 3) {
+      // Month + 1 digit day
+      const month = limited.slice(0, 2).padStart(2, '0')
+      const day = limited.slice(2)
+      if (endsWithSlash) {
+        // User typed "1/5/" - pad day to "01/05/"
+        return `${month}/${day.padStart(2, '0')}/`
+      }
+      return `${month}/${day}`
+    } else if (limited.length === 4) {
+      // Month + 2 digits day - pad both if needed, add slash
+      const month = limited.slice(0, 2).padStart(2, '0')
+      const day = limited.slice(2, 4).padStart(2, '0')
+      return `${month}/${day}/`
+    } else {
+      // Full date - pad month and day
+      const month = limited.slice(0, 2).padStart(2, '0')
+      const day = limited.slice(2, 4).padStart(2, '0')
+      const year = limited.slice(4)
+      return `${month}/${day}/${year}`
+    }
+  }
+
+  const validateDate = (dateString) => {
+    if (!dateString) return false
+    
+    // Check format MM/DD/YYYY
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
+    const match = dateString.match(dateRegex)
+    
+    if (!match) return false
+    
+    const month = parseInt(match[1], 10)
+    const day = parseInt(match[2], 10)
+    const year = parseInt(match[3], 10)
+    
+    // Validate month (1-12)
+    if (month < 1 || month > 12) return false
+    
+    // Validate day (1-31, but we'll check month-specific limits)
+    if (day < 1 || day > 31) return false
+    
+    // Validate year (reasonable range, e.g., 1900 to current year)
+    const currentYear = new Date().getFullYear()
+    if (year < 1900 || year > currentYear) return false
+    
+    // Check if the date is actually valid (handles leap years, month days, etc.)
+    const date = new Date(year, month - 1, day)
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return false
+    }
+    
+    // Check if date is in the future
+    if (date > new Date()) return false
+    
+    return true
+  }
+
+  const handleDateChange = (e) => {
+    const rawValue = e.target.value
+    const formatted = formatDateInput(rawValue)
+    setFormData({
+      ...formData,
+      dateOfBirth: formatted
+    })
+    setIsSaved(false)
+  }
+
+  const handleDateBlur = (e) => {
+    const dateValue = e.target.value
+    if (dateValue && !validateDate(dateValue)) {
+      // Clear invalid date
+      setFormData({
+        ...formData,
+        dateOfBirth: ''
+      })
+    }
+  }
+
   const handleChange = (e) => {
+    // Use special handler for date of birth
+    if (e.target.name === 'dateOfBirth') {
+      handleDateChange(e)
+      return
+    }
+    
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -94,20 +207,23 @@ function Profile() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="age">
-                Age <span className="required-star">*</span>
+              <label htmlFor="dateOfBirth">
+                Date of Birth <span className="required-star">*</span>
               </label>
               <input
-                type="number"
-                id="age"
-                name="age"
-                value={formData.age}
+                type="text"
+                id="dateOfBirth"
+                name="dateOfBirth"
+                value={formData.dateOfBirth}
                 onChange={handleChange}
-                placeholder="Enter your age"
-                min="13"
-                max="120"
+                onBlur={handleDateBlur}
+                placeholder="MM/DD/YYYY (e.g., 01/15/1990)"
+                pattern="\d{2}/\d{2}/\d{4}"
                 required
+                className="date-input"
+                maxLength={10}
               />
+              <small className="date-hint">Format: MM/DD/YYYY</small>
             </div>
 
             <div className="form-group">

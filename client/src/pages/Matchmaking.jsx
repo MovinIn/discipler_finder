@@ -1,14 +1,19 @@
 import { useState, useMemo, useEffect } from 'react'
 import { FaUser, FaChurch, FaMapMarkerAlt, FaChevronDown, FaTimes } from 'react-icons/fa'
 import { useProfile } from '../context/ProfileContext'
+import { useRequests } from '../context/RequestsContext'
 import './Matchmaking.css'
 
 function Matchmaking() {
   const { profile, updateProfile } = useProfile()
+  const { addSentRequest } = useRequests()
   const [requestedMatches, setRequestedMatches] = useState(new Set())
   const [showNotification, setShowNotification] = useState(false)
   const [notificationPerson, setNotificationPerson] = useState('')
   const [expandedCard, setExpandedCard] = useState(null)
+  const [showMessageModal, setShowMessageModal] = useState(false)
+  const [selectedMatch, setSelectedMatch] = useState(null)
+  const [requestMessage, setRequestMessage] = useState('')
 
   // Autofill gender preference from profile gender if not already set
   useEffect(() => {
@@ -182,15 +187,55 @@ function Matchmaking() {
     return filtered
   }, [profile.preference, profile.matchmakingGenderPreference, profile.matchmakingMinAge, profile.matchmakingMaxAge, allMatches])
 
-  const handleRequestMatch = (personId, personName) => {
-    setRequestedMatches(prev => new Set([...prev, personId]))
-    setNotificationPerson(personName)
+  const handleRequestMatchClick = (match) => {
+    setSelectedMatch(match)
+    setRequestMessage('')
+    setShowMessageModal(true)
+  }
+
+  const handleSendRequest = () => {
+    if (!selectedMatch) return
+
+    // Add to sent requests
+    const getRelationshipType = () => {
+      if (profile.preference === 'disciple') {
+        return 'Mentor'
+      } else if (profile.preference === 'be-discipled') {
+        return 'Disciple'
+      } else if (profile.preference === 'accountability') {
+        return 'Accountability Partner'
+      }
+      return 'Mentor'
+    }
+
+    const newRequest = {
+      id: Date.now(),
+      userId: selectedMatch.id,
+      name: selectedMatch.name,
+      email: `${selectedMatch.name.toLowerCase().replace(' ', '.')}@example.com`,
+      preference: selectedMatch.preference,
+      relationshipType: getRelationshipType(),
+      message: requestMessage.trim() || ''
+    }
+
+    addSentRequest(newRequest)
+    setRequestedMatches(prev => new Set([...prev, selectedMatch.id]))
+    setNotificationPerson(selectedMatch.name)
     setShowNotification(true)
+    setShowMessageModal(false)
+    setRequestMessage('')
+    setSelectedMatch(null)
     
     // Hide notification after 3 seconds
     setTimeout(() => {
       setShowNotification(false)
     }, 3000)
+  }
+
+  const handleCancelRequest = () => {
+    setShowMessageModal(false)
+    setRequestMessage('')
+    setSelectedMatch(null)
   }
 
   const handleSeeMore = (matchId) => {
@@ -330,7 +375,7 @@ function Matchmaking() {
               <div className="match-card-footer">
                 <button
                   className={`request-match-btn ${requestedMatches.has(match.id) ? 'requested' : ''}`}
-                  onClick={() => handleRequestMatch(match.id, match.name)}
+                  onClick={() => handleRequestMatchClick(match)}
                   disabled={requestedMatches.has(match.id)}
                 >
                   {requestedMatches.has(match.id) ? 'Request Sent ✓' : 'Request Match'}
@@ -395,7 +440,7 @@ function Matchmaking() {
                   <button
                     className={`request-match-btn ${requestedMatches.has(match.id) ? 'requested' : ''}`}
                     onClick={() => {
-                      handleRequestMatch(match.id, match.name)
+                      handleRequestMatchClick(match)
                       handleCloseModal()
                     }}
                     disabled={requestedMatches.has(match.id)}
@@ -407,6 +452,55 @@ function Matchmaking() {
             </div>
           )
         })()}
+
+        {/* Message Modal */}
+        {showMessageModal && selectedMatch && (
+          <div className="modal-overlay" onClick={handleCancelRequest}>
+            <div className="modal-content message-modal" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close" onClick={handleCancelRequest}>
+                <FaTimes />
+              </button>
+              <div className="modal-header">
+                <div className="match-avatar">
+                  <FaUser />
+                </div>
+                <div className="modal-header-info">
+                  <h2>Send Request to {selectedMatch.name}</h2>
+                  <p className="modal-subtitle">Add a message to your request</p>
+                </div>
+              </div>
+
+              <div className="modal-body">
+                <div className="form-group">
+                  <label htmlFor="request-message">Message (Optional)</label>
+                  <textarea
+                    id="request-message"
+                    className="message-textarea"
+                    placeholder="Write a message to introduce yourself and explain why you'd like to connect..."
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value)}
+                    rows="6"
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="cancel-btn"
+                  onClick={handleCancelRequest}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="send-request-btn"
+                  onClick={handleSendRequest}
+                >
+                  Send Request
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

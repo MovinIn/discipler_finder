@@ -24,6 +24,10 @@ function Navbar() {
   }
 
   const isActive = (path) => {
+    if (path === '/chat') {
+      // Chat route can have optional chatId, so check if path starts with /chat
+      return location.pathname.startsWith('/chat') ? 'active' : ''
+    }
     return location.pathname === path ? 'active' : ''
   }
 
@@ -235,6 +239,33 @@ function Navbar() {
                   onClick={closeMenu}
                 >
                   Profile
+                </Link>
+              </li>
+              <li className="navbar-item">
+                <Link 
+                  to="/sent-requests" 
+                  className={`navbar-link ${isActive('/sent-requests')}`}
+                  onClick={closeMenu}
+                >
+                  Sent Requests
+                </Link>
+              </li>
+              <li className="navbar-item">
+                <Link 
+                  to="/received-requests" 
+                  className={`navbar-link ${isActive('/received-requests')}`}
+                  onClick={closeMenu}
+                >
+                  Received Requests
+                </Link>
+              </li>
+              <li className="navbar-item">
+                <Link 
+                  to="/chat" 
+                  className={`navbar-link ${isActive('/chat')}`}
+                  onClick={closeMenu}
+                >
+                  Chat
                 </Link>
               </li>
             </>

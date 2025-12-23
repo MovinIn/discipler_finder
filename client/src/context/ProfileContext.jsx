@@ -7,6 +7,7 @@ export function ProfileProvider({ children }) {
     church: '',
     preference: '', // 'disciple', 'be-discipled', 'accountability'
     age: '',
+    dateOfBirth: '', // Date of birth instead of age
     gender: '',
     lookingFor: '',
     future: '',
@@ -25,6 +26,7 @@ export function ProfileProvider({ children }) {
       church: '',
       preference: '',
       age: '',
+      dateOfBirth: '',
       gender: '',
       lookingFor: '',
       future: '',

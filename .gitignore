@@ -7,15 +7,31 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Frontend
 node_modules
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Backend (Java/Maven)
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/
+mvnw
+mvnw.cmd
+
+# Local properties (may contain sensitive credentials)
+server/src/main/resources/local.properties
+
+# IDE
 .vscode/*
 !.vscode/extensions.json
 .idea
+*.iml
 .DS_Store
 *.suo
 *.ntvs*

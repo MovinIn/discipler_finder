@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discipler Finder API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .endpoint {
+            background: #f9f9f9;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Discipler Finder API Server</h1>
+        <p>Java Servlet backend is running successfully!</p>
+        
+        <h2>Available Endpoints:</h2>
+        
+        <div class="endpoint">
+            <strong>GET /api/health</strong>
+            <p>Health check endpoint</p>
+            <code>http://localhost:8080/api/health</code>
+        </div>
+        
+        <div class="endpoint">
+            <strong>GET /api/users</strong>
+            <p>Get list of users</p>
+            <code>http://localhost:8080/api/users</code>
+        </div>
+        
+        <div class="endpoint">
+            <strong>POST /api/*</strong>
+            <p>Handle POST requests</p>
+        </div>
+        
+        <h2>Next Steps:</h2>
+        <ul>
+            <li>Configure your servlet container (Tomcat, Jetty, etc.)</li>
+            <li>Update CORS settings in <code>ApiServlet.java</code> if needed</li>
+            <li>Add more servlets for different endpoints</li>
+            <li>Connect to a database if needed</li>
+        </ul>
+    </div>
+</body>
+</html>
+

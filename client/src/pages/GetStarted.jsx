@@ -13,7 +13,8 @@ function GetStarted() {
     age: profile.age || '',
     gender: profile.gender || '',
     lookingFor: profile.lookingFor || '',
-    future: profile.future || ''
+    future: profile.future || '',
+    disciplingExperience: profile.disciplingExperience || ''
   })
 
   // Update form data when profile changes
@@ -24,7 +25,8 @@ function GetStarted() {
       age: profile.age || '',
       gender: profile.gender || '',
       lookingFor: profile.lookingFor || '',
-      future: profile.future || ''
+      future: profile.future || '',
+      disciplingExperience: profile.disciplingExperience || ''
     })
   }, [profile])
 
@@ -276,7 +278,7 @@ function GetStarted() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="future">What do you want from this? (Future goals)</label>
+                  <label htmlFor="future">What do you want from this?</label>
                   <textarea
                     id="future"
                     name="future"
@@ -287,6 +289,20 @@ function GetStarted() {
                     required
                   />
                 </div>
+
+                {formData.preference === 'disciple' && (
+                  <div className="form-group">
+                    <label htmlFor="disciplingExperience">Discipling Experience</label>
+                    <textarea
+                      id="disciplingExperience"
+                      name="disciplingExperience"
+                      value={formData.disciplingExperience}
+                      onChange={handleChange}
+                      placeholder="Describe your prior experience discipling someone else..."
+                      rows="4"
+                    />
+                  </div>
+                )}
 
                 <div className="form-actions">
                   <button type="button" onClick={handleBack} className="back-btn">

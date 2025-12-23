@@ -131,6 +131,16 @@
   padding-right: 2.5rem;
 }
 
+.date-input {
+  font-family: inherit;
+}
+
+.date-hint {
+  color: #888;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
 .submit-btn {
   padding: 1rem;
   background-color: #646cff;
