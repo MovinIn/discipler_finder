@@ -26,6 +26,7 @@ mvnw.cmd
 
 # Local properties (may contain sensitive credentials)
 server/src/main/resources/local.properties
+server/src/main/resources/vm.properties
 
 # IDE
 .vscode/*
