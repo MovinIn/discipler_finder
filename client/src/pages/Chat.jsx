@@ -13,7 +13,8 @@ function Chat() {
 
   useEffect(() => {
     if (chatId) {
-      const chat = chats.find(c => c.id === parseInt(chatId))
+      // First try to find by id, then by userId (in case navigation uses userId)
+      const chat = chats.find(c => c.id === parseInt(chatId)) || chats.find(c => c.userId === parseInt(chatId))
       if (chat) {
         setSelectedChat(chat)
         markAsRead(chat.id)

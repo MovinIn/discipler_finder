@@ -26,7 +26,11 @@ function ReceivedRequests() {
     // Check if chat already exists
     const existingChat = getChatByUserId(request.userId)
     
-    if (!existingChat) {
+    if (existingChat) {
+      // Use existing chat's id for navigation
+      removeReceivedRequest(request.id)
+      navigate(`/chat/${existingChat.id}`)
+    } else {
       // Add chat when accepted (only if it doesn't exist)
       const newChat = {
         id: request.userId,
@@ -39,13 +43,11 @@ function ReceivedRequests() {
         relationshipType: request.relationshipType
       }
       addChat(newChat)
+      // Remove from received requests
+      removeReceivedRequest(request.id)
+      // Navigate using the new chat's id
+      navigate(`/chat/${newChat.id}`)
     }
-    
-    // Remove from received requests
-    removeReceivedRequest(request.id)
-    
-    // Navigate to chat
-    navigate(`/chat/${request.userId}`)
   }
 
   const handleReject = (requestId) => {
@@ -55,7 +57,11 @@ function ReceivedRequests() {
   const handleChatClick = (userId) => {
     // Check if chat exists, if not create it
     const existingChat = getChatByUserId(userId)
-    if (!existingChat) {
+    if (existingChat) {
+      // Use the existing chat's id for navigation
+      navigate(`/chat/${existingChat.id}`)
+    } else {
+      // Create new chat
       const request = requests.find(r => r.userId === userId)
       if (request) {
         const newChat = {
@@ -69,9 +75,10 @@ function ReceivedRequests() {
           relationshipType: request.relationshipType
         }
         addChat(newChat)
+        // Navigate using the new chat's id
+        navigate(`/chat/${newChat.id}`)
       }
     }
-    navigate(`/chat/${userId}`)
   }
 
   return (

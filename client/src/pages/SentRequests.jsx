@@ -29,7 +29,11 @@ function SentRequests() {
   const handleChatClick = (userId) => {
     // Check if chat exists, if not create it
     const existingChat = getChatByUserId(userId)
-    if (!existingChat) {
+    if (existingChat) {
+      // Use the existing chat's id for navigation
+      navigate(`/chat/${existingChat.id}`)
+    } else {
+      // Create new chat
       const request = sentRequests.find(r => r.userId === userId)
       if (request) {
         const newChat = {
@@ -43,9 +47,10 @@ function SentRequests() {
           relationshipType: getRelationshipType()
         }
         addChat(newChat)
+        // Navigate using the new chat's id
+        navigate(`/chat/${newChat.id}`)
       }
     }
-    navigate(`/chat/${userId}`)
   }
 
   return (
