@@ -1,11 +1,11 @@
 package com.disciplefinder.servlets;
 
 public class SessionPair {
-    public String email;
-    public String sessionID;
+    public final int id;
+    public final String sessionID;
     
-    public SessionPair(String email, String sessionID) {
-        this.email = email;
+    public SessionPair(int id, String sessionID) {
+        this.id = id;
         this.sessionID = sessionID;
     }
 }
