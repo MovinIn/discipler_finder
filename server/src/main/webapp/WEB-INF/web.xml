@@ -10,7 +10,7 @@
     <description>
         Backend server for Discipler Finder application using Java Servlets
     </description>
-    
+
     <!-- Welcome file list -->
     <welcome-file-list>
         <welcome-file>index.html</welcome-file>

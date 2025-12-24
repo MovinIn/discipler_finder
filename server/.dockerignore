@@ -1,0 +1,3 @@
+target/*
+.idea/*
+!target/discipler-finder-server-1.0.0.war
