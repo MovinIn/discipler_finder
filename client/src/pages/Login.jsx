@@ -11,7 +11,12 @@ function Login() {
     confirmPassword: '',
     name: ''
   })
-  const { login } = useAuth()
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [showResendActivation, setShowResendActivation] = useState(false)
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { login, createAccount } = useAuth()
   const navigate = useNavigate()
 
   const handleChange = (e) => {
@@ -19,16 +24,76 @@ function Login() {
       ...formData,
       [e.target.name]: e.target.value
     })
+    setError('')
+    setSuccess('')
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Mockup - simulate login/account creation
-    console.log(isLogin ? 'Login' : 'Create Account', formData)
-    
-    // Set user as logged in and redirect
-    login()
-    navigate('/')
+    setError('')
+    setSuccess('')
+    setIsSubmitting(true)
+
+    if (isLogin) {
+      // Login
+      const result = await login(formData.email, formData.password)
+      if (result.success) {
+        navigate('/')
+      } else {
+        setError(result.error)
+        // Show resend activation option if account not activated
+        if (result.error.includes('not activated') || result.error.includes('activation')) {
+          setShowResendActivation(true)
+        }
+      }
+    } else {
+      // Create Account
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (formData.password.length < 4) {
+        setError('Password must be at least 4 characters')
+        setIsSubmitting(false)
+        return
+      }
+
+      const result = await createAccount(formData.email, formData.password)
+      if (result.success) {
+        setSuccess(result.message || 'Account created! Please check your email for activation instructions.')
+        setFormData({ email: '', password: '', confirmPassword: '', name: '' })
+        // Switch to login after 3 seconds
+        setTimeout(() => {
+          setIsLogin(true)
+          setSuccess('')
+        }, 3000)
+      } else {
+        setError(result.error)
+      }
+    }
+    setIsSubmitting(false)
+  }
+
+  const handleResendActivation = async () => {
+    setError('')
+    setSuccess('')
+    setIsSubmitting(true)
+    // TODO: Implement resend activation API call
+    setSuccess('Activation code sent to your email')
+    setShowResendActivation(false)
+    setIsSubmitting(false)
+  }
+
+  const handleRequestResetPassword = async () => {
+    setError('')
+    setSuccess('')
+    setIsSubmitting(true)
+    // TODO: Implement reset password API call
+    setSuccess('If the email exists, a password reset code has been sent')
+    setShowResetPassword(false)
+    setIsSubmitting(false)
   }
 
   return (
@@ -51,6 +116,60 @@ function Login() {
               Create Account
             </button>
           </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="success-message">
+              {success}
+            </div>
+          )}
+
+          {showResendActivation && (
+            <div className="resend-activation-box">
+              <p>Your account is not activated. Would you like us to resend the activation code?</p>
+              <button 
+                type="button"
+                onClick={handleResendActivation}
+                disabled={isSubmitting}
+                className="resend-btn"
+              >
+                {isSubmitting ? 'Sending...' : 'Resend Activation Code'}
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowResendActivation(false)}
+                className="cancel-resend-btn"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {showResetPassword && (
+            <div className="reset-password-box">
+              <p>Enter your email to receive a password reset code:</p>
+              <button 
+                type="button"
+                onClick={handleRequestResetPassword}
+                disabled={isSubmitting || !formData.email}
+                className="reset-btn"
+              >
+                {isSubmitting ? 'Sending...' : 'Send Reset Code'}
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowResetPassword(false)}
+                className="cancel-reset-btn"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="login-form">
             {!isLogin && (
@@ -115,12 +234,21 @@ function Login() {
                   <input type="checkbox" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="forgot-password">Forgot password?</a>
+                <a 
+                  href="#" 
+                  className="forgot-password"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowResetPassword(true)
+                  }}
+                >
+                  Forgot password?
+                </a>
               </div>
             )}
 
-            <button type="submit" className="submit-btn">
-              {isLogin ? 'Login' : 'Create Account'}
+            <button type="submit" className="submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Processing...' : (isLogin ? 'Login' : 'Create Account')}
             </button>
           </form>
         </div>
