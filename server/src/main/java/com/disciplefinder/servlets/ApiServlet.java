@@ -16,14 +16,24 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+
+import org.apache.commons.lang3.tuple.Pair;
 
 @FunctionalInterface
 interface MySQLFunction {
@@ -115,7 +125,7 @@ public class ApiServlet extends HttpServlet {
       function.execute(conn);
     } catch (SQLException e) {
       sendJson(response,
-          Map.of("status", "error", "message", "Database error"),
+          Map.of("status", "error", "message", e.getMessage()),
           HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
     }
   }
@@ -128,14 +138,16 @@ public class ApiServlet extends HttpServlet {
       }
       function.execute(conn);
     } catch (SQLException e) {
-      throw new IOException("Database error", e);
+      sendJson(response,
+          Map.of("status", "error", "message", e.getMessage()),
+          HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
     }
   }
 
   private boolean invalidSessionID(SessionPair sessionPair, Connection conn, HttpServletResponse response)
       throws SQLException, IOException {
     PreparedStatement checkStmt = conn.prepareStatement(
-        "SELECT COUNT(*) FROM users WHERE id = ? AND session_id = ?");
+        "SELECT COUNT(*) FROM codes WHERE user_id = ? AND code = ? AND expires_at > NOW()");
     checkStmt.setInt(1, sessionPair.id);
     checkStmt.setString(2, sessionPair.sessionID);
     ResultSet rs = checkStmt.executeQuery();
@@ -189,6 +201,16 @@ public class ApiServlet extends HttpServlet {
       case "get_matches" -> getMatches(request, response);
       case "get_sent_requests" -> getSentRequests(request, response);
       case "get_received_requests" -> getReceivedRequests(request, response);
+      case "send_request" -> sendRequest(request, response);
+      case "get_latest_messages" -> getLatestMessages(request, response);
+      case "get_older_messages" -> getOlderMessages(request, response);
+      case "send_message" -> sendMessage(request, response);
+      case "get_posts" -> getPosts(request, response);
+      case "query_posts" -> queryPosts(request, response);
+      case "mark_messages_as_read" -> markMessagesAsRead(request, response);
+      case "create_chat" -> createChat(request, response);
+      case "signout" -> signout(request, response);
+      case "send_post" -> sendPost(request, response);
       default -> {
         sendJson(response,
             Map.of("message", "Unknown action: " + action),
@@ -210,8 +232,7 @@ public class ApiServlet extends HttpServlet {
 
     executeSQL(conn -> {
       PreparedStatement stmt = conn.prepareStatement(
-          "SELECT id, password, activated, email, dob, church, gender, requirements, goals, experience, " +
-              "created_at, finding_discipler, finding_disciple, finding_accountability " +
+          "SELECT id, password, activated, email, dob, church, gender, created_at " +
               "FROM users WHERE email = ?");
       stmt.setString(1, email);
       ResultSet rs = stmt.executeQuery();
@@ -240,13 +261,14 @@ public class ApiServlet extends HttpServlet {
         return;
       }
 
-      String sessionID = getRandomAlphanumeric(20);
+      String sessionID = getRandomAlphanumeric(15);
 
-      PreparedStatement updateStmt = conn.prepareStatement(
-          "UPDATE users SET session_id = ? WHERE email = ?");
-      updateStmt.setString(1, sessionID);
-      updateStmt.setString(2, email);
-      updateStmt.executeUpdate();
+      PreparedStatement insertStmt = conn.prepareStatement(
+          "INSERT INTO codes (user_id, code, code_type, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL 7 DAY)");
+      insertStmt.setInt(1, rs.getInt("id"));
+      insertStmt.setString(2, sessionID);
+      insertStmt.setString(3, "session");
+      insertStmt.executeUpdate();
 
       Profile.Builder profileBuilder = new Profile.Builder()
           .id(rs.getInt("id"))
@@ -254,13 +276,7 @@ public class ApiServlet extends HttpServlet {
           .dob(rs.getDate("dob"))
           .church(rs.getString("church"))
           .gender(rs.getString("gender"))
-          .requirements(rs.getString("requirements"))
-          .goals(rs.getString("goals"))
-          .experience(rs.getString("experience"))
-          .created_at(rs.getTimestamp("created_at"))
-          .finding_discipler(rs.getBoolean("finding_discipler"))
-          .finding_disciple(rs.getBoolean("finding_disciple"))
-          .finding_accountability(rs.getBoolean("finding_accountability"));
+          .created_at(rs.getTimestamp("created_at"));
 
       Profile profile = profileBuilder.build();
 
@@ -275,10 +291,17 @@ public class ApiServlet extends HttpServlet {
   private void createAccount(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final String email = request.getParameter("email");
     final String password = request.getParameter("password");
+    final String dobStr = request.getParameter("dob");
+    final String church = request.getParameter("church");
+    final String gender = request.getParameter("gender");
+    final String name = request.getParameter("name");
 
-    if (email == null || password == null || email.isEmpty() || password.isEmpty()) {
+    if (email == null || password == null || dobStr == null || church == null || gender == null || name == null ||
+        email.isEmpty() || password.isEmpty() || dobStr.isEmpty() || church.isEmpty() || gender.isEmpty()
+        || name.isEmpty() ||
+        !dobStr.matches("\\d{4}-\\d{2}-\\d{2}") || !gender.matches("M|F")) {
       sendJson(response,
-          Map.of("message", "Email and password are required"),
+          Map.of("message", "All required fields must be provided"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
     }
@@ -307,10 +330,13 @@ public class ApiServlet extends HttpServlet {
       byte[] hashedPassword = BCrypt.withDefaults().hash(12, salt, password.getBytes());
 
       PreparedStatement insertStmt = conn.prepareStatement(
-          "INSERT INTO users (email, password, finding_discipler, finding_disciple, "
-              + "finding_accountability, activated) VALUES (?, ?, 0, 0, 0, 0);");
+          "INSERT INTO users (email, password, name, dob, church, gender, activated) VALUES (?, ?, ?, ?, ?, ?, 0);");
       insertStmt.setString(1, email);
       insertStmt.setBytes(2, hashedPassword);
+      insertStmt.setString(3, name);
+      insertStmt.setDate(4, Date.valueOf(dobStr));
+      insertStmt.setString(5, church);
+      insertStmt.setString(6, gender);
       insertStmt.executeUpdate();
 
       sendJson(response,
@@ -344,9 +370,6 @@ public class ApiServlet extends HttpServlet {
     final String dobStr = request.getParameter("dob");
     final String church = request.getParameter("church");
     final String gender = request.getParameter("gender");
-    final String requirements = request.getParameter("requirements");
-    final String goals = request.getParameter("goals");
-    final String experience = request.getParameter("experience");
 
     if (email == null || dobStr == null || church == null || gender == null) {
       sendJson(response,
@@ -359,16 +382,12 @@ public class ApiServlet extends HttpServlet {
       Date dob = Date.valueOf(dobStr);
 
       PreparedStatement updateStmt = conn.prepareStatement(
-          "UPDATE users SET email = ?, dob = ?, church = ?, gender = ?, " +
-              "requirements = ?, goals = ?, experience = ? WHERE id = ?");
+          "UPDATE users SET email = ?, dob = ?, church = ?, gender = ? WHERE id = ?");
       updateStmt.setString(1, email);
       updateStmt.setDate(2, dob);
       updateStmt.setString(3, church);
       updateStmt.setString(4, gender);
-      updateStmt.setString(5, requirements);
-      updateStmt.setString(6, goals);
-      updateStmt.setString(7, experience);
-      updateStmt.setInt(8, id);
+      updateStmt.setInt(5, id);
 
       int rowsUpdated = updateStmt.executeUpdate();
       if (rowsUpdated == 0) {
@@ -390,7 +409,8 @@ public class ApiServlet extends HttpServlet {
 
     executeSQL(session, conn -> {
       PreparedStatement stmt = conn.prepareStatement(
-          "SELECT m.id as match_id, m.user_one_id, m.user_two_id, m.discipleship, u.name, u.id as user_id, u.email, u.gender, u.church " +
+          "SELECT m.id as match_id, m.user_one_id, m.user_two_id, m.discipleship, u.name, u.id as user_id, u.email, u.gender, u.church "
+              +
               "FROM matches m " +
               "JOIN users u ON u.id = CASE WHEN m.user_one_id = ? THEN m.user_two_id ELSE m.user_one_id END " +
               "WHERE ? IN (m.user_one_id, m.user_two_id)");
@@ -430,13 +450,7 @@ public class ApiServlet extends HttpServlet {
         .dob(columnOrDefault(() -> rs.getDate("dob"), null))
         .church(columnOrDefault(() -> rs.getString("church"), null))
         .gender(columnOrDefault(() -> rs.getString("gender"), null))
-        .requirements(columnOrDefault(() -> rs.getString("requirements"), null))
-        .goals(columnOrDefault(() -> rs.getString("goals"), null))
-        .experience(columnOrDefault(() -> rs.getString("experience"), null))
-        .created_at(columnOrDefault(() -> rs.getTimestamp("created_at"), null))
-        .finding_discipler(columnOrDefault(() -> rs.getBoolean("finding_discipler"), null))
-        .finding_disciple(columnOrDefault(() -> rs.getBoolean("finding_disciple"), null))
-        .finding_accountability(columnOrDefault(() -> rs.getBoolean("finding_accountability"), null));
+        .created_at(columnOrDefault(() -> rs.getTimestamp("created_at"), null));
 
     return profileBuilder.build();
   }
@@ -450,7 +464,10 @@ public class ApiServlet extends HttpServlet {
           "request_id", rs.getInt("request_id"),
           "message", rs.getString("message"),
           "type", rs.getString("type"),
-          "requested_at", rs.getTimestamp("requested_at")));
+          "requested_at", rs.getTimestamp("requested_at"),
+          "requirements", columnOrDefault(() -> rs.getString("requirements"), null),
+          "goals", columnOrDefault(() -> rs.getString("goals"), null),
+          "experience", columnOrDefault(() -> rs.getString("experience"), null)));
     }
     return requests;
   }
@@ -463,9 +480,10 @@ public class ApiServlet extends HttpServlet {
     executeSQL(session, conn -> {
       PreparedStatement stmt = conn.prepareStatement(
           "SELECT r.id as request_id, r.requested_at, r.message, r.requester_id, r.requestee_id, r.type, " +
-              "u.name, u.id as user_id, u.email, u.gender, u.church, u.requirements, u.goals, u.experience" +
+              "u.name, u.id as user_id, u.email, u.gender, u.church, m.requirements, m.goals, m.experience " +
               "FROM requests r " +
               "JOIN users u ON r.requestee_id = u.id " +
+              "LEFT JOIN posts m ON r.requestee_id = m.user_id AND m.type = r.type " +
               "WHERE r.requester_id = ?");
       stmt.setInt(1, id);
       ResultSet rs = stmt.executeQuery();
@@ -481,13 +499,401 @@ public class ApiServlet extends HttpServlet {
     executeSQL(session, conn -> {
       PreparedStatement stmt = conn.prepareStatement(
           "SELECT r.id as request_id, r.requested_at, r.message, r.requester_id, r.requestee_id, r.type, " +
-              "u.name, u.id as user_id, u.email, u.gender, u.church, u.requirements, u.goals, u.experience" +
+              "u.name, u.id as user_id, u.email, u.gender, u.church" +
               "FROM requests r " +
               "JOIN users u ON r.requester_id = u.id " +
               "WHERE r.requestee_id = ?");
       stmt.setInt(1, id);
       ResultSet rs = stmt.executeQuery();
       sendJson(response, handleRequestResults(rs));
+    }, response);
+  }
+
+  private void getPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement(
+          "SELECT id, type, requirements, goals, experience FROM posts WHERE user_id = ?");
+      stmt.setInt(1, id);
+      ResultSet rs = stmt.executeQuery();
+      List<Map<String, Object>> posts = new ArrayList<>();
+      while (rs.next()) {
+        posts.add(Map.of("id", rs.getInt("id"), "type", rs.getString("type"),
+            "requirements", rs.getString("requirements"), "goals", rs.getString("goals"),
+            "experience", rs.getString("experience")));
+      }
+      sendJson(response, posts);
+    }, response);
+  }
+
+  private Pair<Date, Date> dobRange(int minAge, int maxAge) {
+    LocalDate today = LocalDate.now();
+
+    LocalDate youngestDob = today.minusYears(minAge);
+    LocalDate oldestDob = today.minusYears(maxAge);
+
+    return Pair.of(Date.valueOf(youngestDob), Date.valueOf(oldestDob));
+  }
+
+  private void queryPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final String gender = request.getParameter("gender");
+    final String type = request.getParameter("type");
+
+    final int lAge = Integer.parseInt(request.getParameter("l_age"));
+    final int hAge = Integer.parseInt(request.getParameter("h_age"));
+    final Pair<Date, Date> range = dobRange(lAge, hAge);
+
+    final String church = request.getParameter("church");
+
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      StringBuilder sql = new StringBuilder("""
+          SELECT p.id, p.user_id, p.type, p.requirements, p.goals, p.experience, u.name, u.email, u.gender, u.church
+          FROM posts p
+          JOIN users u ON p.user_id = u.id
+          WHERE u.id != ? AND u.dob BETWEEN ? AND ? AND u.church = ?
+          """);
+
+      List<Object> params = new ArrayList<>();
+      params.add(id);
+      params.add(range.getLeft());
+      params.add(range.getRight());
+      params.add(church);
+
+      // optional filters
+      if (type != null) {
+        sql.append(" AND p.type = ?");
+        params.add(type);
+      }
+
+      if (gender != null) {
+        sql.append(" AND u.gender = ?");
+        params.add(gender);
+      }
+
+      PreparedStatement stmt = conn.prepareStatement(sql.toString());
+      for (int i = 0; i < params.size(); i++) {
+        stmt.setObject(i + 1, params.get(i));
+      }
+
+      ResultSet rs = stmt.executeQuery();
+      List<Map<String, Object>> posts = new ArrayList<>();
+      while (rs.next()) {
+        posts.add(Map.of("id", rs.getInt("id"), "user_id", rs.getInt("user_id"),
+            "type", rs.getString("type"), "requirements", rs.getString("requirements"),
+            "goals", rs.getString("goals"), "experience", rs.getString("experience"),
+            "name", rs.getString("name"), "email", rs.getString("email"),
+            "gender", rs.getString("gender"), "church", rs.getString("church")));
+      }
+      sendJson(response, posts);
+    }, response);
+  }
+
+  private void sendRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int requesteeId = Integer.parseInt(request.getParameter("requestee_id"));
+    final String message = request.getParameter("message");
+    final String type = request.getParameter("type");
+
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement(
+          "INSERT INTO requests (requester_id, requestee_id, message, type) VALUES (?, ?, ?, ?)",
+          Statement.RETURN_GENERATED_KEYS);
+      stmt.setInt(1, id);
+      stmt.setInt(2, requesteeId);
+      stmt.setString(3, message);
+      stmt.setString(4, type.toUpperCase());
+
+      int rowsInserted = stmt.executeUpdate();
+      if (rowsInserted == 0) {
+        sendJson(response,
+            Map.of("message", "You have already sent a request to this user."),
+            HttpServletResponse.SC_CONFLICT);
+        return;
+      }
+
+      long requestId = stmt.getGeneratedKeys().getLong(1);
+      sendJson(response, Map.of("message", "Request sent successfully", "request_id", requestId));
+    }, response);
+  }
+
+  private void getLatestMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    SessionPair session = new SessionPair(id, sessionID);
+
+    executeSQL(session, conn -> {
+      Map<Integer, Map<String, Object>> chatMap = new LinkedHashMap<>();
+
+      String msgSql = """
+          SELECT chat_id, message_id, sender_id, message, sent_at, last_read_message_id, chat_created_at
+          FROM (
+            SELECT cp.chat_id,
+              m.id AS message_id,
+              m.sender_id,
+              m.message,
+              m.sent_at,
+              cp.last_read_message_id,
+              c.created_at AS chat_created_at,
+              ROW_NUMBER() OVER (PARTITION BY cp.chat_id ORDER BY m.id DESC) AS rn
+            FROM chat_participants cp
+            INNER JOIN chats c ON c.id = cp.chat_id
+            LEFT JOIN messages m ON m.chat_id = cp.chat_id
+            WHERE cp.user_id = ?
+          ) t
+          WHERE rn <= 10 OR rn IS NULL
+          ORDER BY chat_id, message_id ASC
+          """;
+
+      Set<Integer> chatIds = new LinkedHashSet<>();
+      Map<Integer, Integer> lastReadMap = new HashMap<>();
+      Map<Integer, Timestamp> chatCreatedAtMap = new HashMap<>();
+
+      try (PreparedStatement stmt = conn.prepareStatement(msgSql)) {
+        stmt.setInt(1, id);
+        ResultSet rs = stmt.executeQuery();
+
+        while (rs.next()) {
+          int chatId = rs.getInt("chat_id");
+          chatIds.add(chatId);
+
+          if (!lastReadMap.containsKey(chatId)) {
+            Integer lastReadId = rs.getObject("last_read_message_id", Integer.class);
+            lastReadMap.put(chatId, lastReadId);
+            chatCreatedAtMap.put(chatId, rs.getTimestamp("chat_created_at"));
+          }
+
+          Map<String, Object> chat = chatMap.computeIfAbsent(chatId, k -> {
+            Map<String, Object> chatData = new HashMap<>();
+            chatData.put("chat_id", chatId);
+            chatData.put("chat_created_at", chatCreatedAtMap.get(chatId));
+            Integer lastReadId = lastReadMap.get(chatId);
+            chatData.put("last_read_message_id", lastReadId);
+            chatData.put("messages", new ArrayList<Map<String, Object>>());
+            chatData.put("participants", new ArrayList<Map<String, Object>>());
+            return chatData;
+          });
+
+          Integer msgId = rs.getObject("message_id", Integer.class);
+          if (msgId != null) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> messages = (List<Map<String, Object>>) chat.get("messages");
+
+            Map<String, Object> msg = new HashMap<>();
+            msg.put("id", msgId);
+            msg.put("sender_id", rs.getInt("sender_id"));
+            msg.put("content", rs.getString("message"));
+            msg.put("created_at", rs.getTimestamp("sent_at"));
+
+            messages.add(msg);
+          }
+        }
+      }
+
+      if (chatIds.isEmpty()) {
+        sendJson(response, new ArrayList<>());
+        return;
+      }
+
+      String placeholders = String.join(",", Collections.nCopies(chatIds.size(), "?"));
+      String partSql = "SELECT cp.chat_id, u.id AS user_id, u.name, u.email " +
+          "FROM chat_participants cp " +
+          "JOIN users u ON cp.user_id = u.id " +
+          "WHERE cp.chat_id IN (" + placeholders + ") " +
+          "ORDER BY cp.chat_id, u.name";
+
+      try (PreparedStatement stmt = conn.prepareStatement(partSql)) {
+        int index = 1;
+        for (Integer chatId : chatIds) {
+          stmt.setInt(index++, chatId);
+        }
+
+        ResultSet rs = stmt.executeQuery();
+        while (rs.next()) {
+          int chatId = rs.getInt("chat_id");
+          Map<String, Object> chat = chatMap.get(chatId);
+
+          @SuppressWarnings("unchecked")
+          List<Map<String, Object>> participants = (List<Map<String, Object>>) chat.get("participants");
+
+          Map<String, Object> participant = new HashMap<>();
+          participant.put("id", rs.getInt("user_id"));
+          participant.put("name", rs.getString("name"));
+          participant.put("email", rs.getString("email"));
+          participants.add(participant);
+        }
+      }
+
+      sendJson(response, new ArrayList<>(chatMap.values()));
+    }, response);
+  }
+
+  private void getOlderMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int chatId = Integer.parseInt(request.getParameter("chat_id"));
+    final int earliestMessageId = Integer.parseInt(request.getParameter("earliest_message_id"));
+
+    executeSQL(new SessionPair(id, sessionID), conn -> {
+      PreparedStatement stmt = conn.prepareStatement("""
+          SELECT id AS message_id, sender_id, message, sent_at
+          FROM messages
+          WHERE chat_id = ?
+            AND id < ?
+          ORDER BY id DESC
+          LIMIT 20
+          """);
+      stmt.setInt(1, chatId);
+      stmt.setInt(2, earliestMessageId);
+      ResultSet rs = stmt.executeQuery();
+      List<Map<String, Object>> messages = new ArrayList<>();
+      while (rs.next()) {
+        messages.add(Map.of("id", rs.getInt("message_id"), "sender_id", rs.getInt("sender_id"), "message",
+            rs.getString("message"), "sent_at", rs.getTimestamp("sent_at")));
+      }
+      sendJson(response, messages);
+    }, response);
+  }
+
+  private void sendMessage(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int chatId = Integer.parseInt(request.getParameter("chat_id"));
+    final String message = request.getParameter("message");
+
+    if (message == null || message.isEmpty()) {
+      sendJson(response,
+          Map.of("message", "Message cannot be empty"),
+          HttpServletResponse.SC_BAD_REQUEST);
+      return;
+    }
+
+    if (message.length() > 2048) {
+      sendJson(response,
+          Map.of("message", "Message must be at most 2048 characters"),
+          HttpServletResponse.SC_BAD_REQUEST);
+      return;
+    }
+
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement checkStmt = conn.prepareStatement(
+          "SELECT COUNT(*) FROM chat_participants WHERE chat_id = ? AND user_id = ?");
+      checkStmt.setInt(1, chatId);
+      checkStmt.setInt(2, id);
+      ResultSet checkRs = checkStmt.executeQuery();
+      if (checkRs.next() && checkRs.getInt(1) == 0) {
+        sendJson(response,
+            Map.of("message", "User is not a participant in this chat"),
+            HttpServletResponse.SC_FORBIDDEN);
+        return;
+      }
+
+      PreparedStatement insertStmt = conn.prepareStatement(
+          "INSERT INTO messages (chat_id, sender_id, message, sent_at) VALUES (?, ?, ?, NOW())",
+          Statement.RETURN_GENERATED_KEYS);
+      insertStmt.setInt(1, chatId);
+      insertStmt.setInt(2, id);
+      insertStmt.setString(3, message);
+      insertStmt.executeUpdate();
+
+      try (ResultSet keys = insertStmt.getGeneratedKeys()) {
+        int messageId = keys.next() ? keys.getInt(1) : 0;
+        sendJson(response, Map.of(
+            "message", "Message sent successfully",
+            "message_id", messageId));
+      }
+    }, response);
+  }
+
+  private void markMessagesAsRead(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int chatId = Integer.parseInt(request.getParameter("chat_id"));
+    final int messageId = Integer.parseInt(request.getParameter("message_id"));
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement(
+          "UPDATE chat_participants SET last_read_message_id = ? WHERE chat_id = ? AND user_id = ?");
+      stmt.setInt(1, messageId);
+      stmt.setInt(2, chatId);
+      stmt.setInt(3, id);
+      stmt.executeUpdate();
+    }, response);
+    sendJson(response, Map.of("message", "Messages marked as read"));
+  }
+
+  private void createChat(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int requesteeId = Integer.parseInt(request.getParameter("requestee_id"));
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement("INSERT INTO chats () VALUES ()", Statement.RETURN_GENERATED_KEYS);
+      stmt.executeUpdate();
+
+      ResultSet rs = stmt.getGeneratedKeys();
+      if (!rs.next()) {
+        sendJson(response,
+            Map.of("message", "Failed to create chat"),
+            HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        return;
+      }
+      final int chatId = rs.getInt(1);
+
+      PreparedStatement insertStmt = conn
+          .prepareStatement("INSERT INTO chat_participants (chat_id, user_id, last_read_message_id) VALUES (?, ?, ?)");
+
+      insertStmt.setInt(1, chatId);
+      insertStmt.setInt(3, 0);
+
+      insertStmt.setInt(2, id);
+      insertStmt.executeUpdate();
+
+      insertStmt.setInt(2, requesteeId);
+      insertStmt.executeUpdate();
+
+      sendJson(response, Map.of("message", "Chat created successfully", "chat_id", chatId));
+    }, response);
+  }
+
+  private void signout(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement("DELETE FROM codes WHERE user_id = ? AND code = ?");
+      stmt.setInt(1, id);
+      stmt.setString(2, sessionID);
+      stmt.executeUpdate();
+      sendJson(response, Map.of("message", "Signed out successfully"));
+    }, response);
+  }
+
+  private void sendPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final String type = request.getParameter("type");
+    final String requirements = request.getParameter("requirements");
+    final String goals = request.getParameter("goals");
+    final String experience = request.getParameter("experience");
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement(
+          "INSERT INTO posts (user_id, type, requirements, goals, experience) VALUES (?, ?, ?, ?, ?)");
+      stmt.setInt(1, id);
+      stmt.setString(2, type);
+      stmt.setString(3, requirements);
+      stmt.setString(4, goals);
+      stmt.setString(5, experience);
+      stmt.executeUpdate();
+      sendJson(response, Map.of("message", "Post sent successfully"));
     }, response);
   }
 }
