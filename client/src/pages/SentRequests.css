@@ -1,6 +1,7 @@
 .sent-requests-page {
   min-height: calc(100vh - 75px);
   padding: 2rem 1.5rem;
+  background: #1a1a1a;
 }
 
 .sent-requests-container {

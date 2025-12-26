@@ -1,12 +1,16 @@
 import { useState, useMemo, useEffect } from 'react'
-import { FaUser, FaChurch, FaMapMarkerAlt, FaChevronDown, FaTimes } from 'react-icons/fa'
+import { FaUser, FaChevronDown, FaTimes } from 'react-icons/fa'
 import { useProfile } from '../context/ProfileContext'
 import { useRequests } from '../context/RequestsContext'
+import { useAuth } from '../context/AuthContext'
 import './Matchmaking.css'
+
+const API_BASE_URL = 'http://localhost:8080/api'
 
 function Matchmaking() {
   const { profile, updateProfile } = useProfile()
   const { addSentRequest } = useRequests()
+  const { user } = useAuth()
   const [requestedMatches, setRequestedMatches] = useState(new Set())
   const [showNotification, setShowNotification] = useState(false)
   const [notificationPerson, setNotificationPerson] = useState('')
@@ -14,17 +18,85 @@ function Matchmaking() {
   const [showMessageModal, setShowMessageModal] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [requestMessage, setRequestMessage] = useState('')
+  const [allMatches, setAllMatches] = useState([])
+  const [loading, setLoading] = useState(true)
 
   // Autofill gender preference from profile gender if not already set
   useEffect(() => {
     if (profile.gender && !profile.matchmakingGenderPreference) {
       // Map profile gender to matchmaking preference (case-insensitive)
       const genderLower = profile.gender.toLowerCase()
-      if (genderLower === 'male' || genderLower === 'female' || genderLower === 'other') {
+      if (genderLower === 'male' || genderLower === 'female') {
         updateProfile({ matchmakingGenderPreference: genderLower })
       }
     }
   }, [profile.gender, profile.matchmakingGenderPreference, updateProfile])
+
+  // Fetch posts from API
+  useEffect(() => {
+    const fetchPosts = async () => {
+      if (!user || !user.profile || !user.profile.church) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const type = profile.preference || 'disciple'
+        // Map frontend preference to backend type (inverted: if user wants to disciple, find people who want to be discipled)
+        const typeMap = {
+          'disciple': 'D', // User wants to disciple, so find people who want to be discipled
+          'be-discipled': 'M', // User wants to be discipled, so find people who want to disciple
+          'accountability': 'A' // User wants accountability, so find people who want accountability
+        }
+        const backendType = typeMap[type] || 'D'
+
+        const gender = profile.matchmakingGenderPreference || ''
+        const minAge = parseInt(profile.matchmakingMinAge) || 13
+        const maxAge = parseInt(profile.matchmakingMaxAge) || 120
+        const church = user.profile.church
+
+        const formData = new URLSearchParams()
+        formData.append('action', 'query_posts')
+        formData.append('id', user.profile.id)
+        formData.append('session_id', user.session_id)
+        formData.append('type', backendType)
+        formData.append('gender', gender || '')
+        formData.append('l_age', minAge.toString())
+        formData.append('h_age', maxAge.toString())
+        formData.append('church', church)
+
+        const response = await fetch(`${API_BASE_URL}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        })
+
+        if (response.status >= 200 && response.status < 300) {
+          const posts = await response.json()
+          // Map API response to match structure
+          const matches = posts.map(post => ({
+            id: post.user_id,
+            name: post.name,
+            email: post.email,
+            gender: post.gender,
+            preference: post.type === 'M' ? 'disciple' : post.type === 'D' ? 'be-discipled' : 'accountability',
+            lookingFor: post.requirements || '',
+            future: post.goals || '',
+            disciplingExperience: post.experience || 'Not specified'
+          }))
+          setAllMatches(matches)
+        }
+      } catch (error) {
+        console.error('Error fetching posts:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPosts()
+  }, [user, profile.preference, profile.matchmakingGenderPreference, profile.matchmakingMinAge, profile.matchmakingMaxAge])
 
   // Helper function to truncate text
   const truncateText = (text, maxLength = 100) => {
@@ -48,144 +120,11 @@ function Matchmaking() {
     updateProfile({ matchmakingMaxAge: e.target.value })
   }
 
-  // Sample match data - in a real app, this would come from an API
-  const allMatches = [
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      age: 28,
-      gender: 'Female',
-      church: 'Grace Community Church',
-      location: 'Springfield, IL',
-      preference: 'be-discipled', // What they want
-      lookingFor: 'Looking for a mentor who can help me grow in my faith and provide guidance in my career and personal life.',
-      future: 'I hope to deepen my relationship with God and become a better disciple who can eventually mentor others.',
-      disciplingExperience: 'None yet, but eager to learn'
-    },
-    {
-      id: 2,
-      name: 'Michael Chen',
-      age: 35,
-      gender: 'Male',
-      church: 'Faith Baptist Church',
-      location: 'Chicago, IL',
-      preference: 'disciple', // What they want - they want to disciple
-      lookingFor: 'Seeking someone to disciple me in biblical study and help me develop leadership skills.',
-      future: 'I want to become a small group leader and eventually serve in church leadership.',
-      disciplingExperience: 'Mentored 2 people over the past 3 years'
-    },
-    {
-      id: 3,
-      name: 'Emily Rodriguez',
-      age: 24,
-      gender: 'Female',
-      church: 'Hope Fellowship',
-      location: 'Peoria, IL',
-      preference: 'be-discipled',
-      lookingFor: 'Looking for a female mentor who understands the challenges of being a young professional and a Christian.',
-      future: 'I want to grow in my faith and learn how to balance work, relationships, and spiritual growth.',
-      disciplingExperience: 'None'
-    },
-    {
-      id: 4,
-      name: 'David Thompson',
-      age: 42,
-      gender: 'Male',
-      church: 'Living Word Church',
-      location: 'Rockford, IL',
-      preference: 'disciple',
-      lookingFor: 'Seeking someone to disciple me in prayer and help me become a better husband and father.',
-      future: 'I want to lead my family spiritually and be a positive influence in my community.',
-      disciplingExperience: 'Discipled 5 people over 8 years'
-    },
-    {
-      id: 5,
-      name: 'Jessica Martinez',
-      age: 31,
-      gender: 'Female',
-      church: 'Victory Christian Center',
-      location: 'Naperville, IL',
-      preference: 'accountability',
-      lookingFor: 'Looking for a mentor who can help me navigate life transitions and deepen my faith.',
-      future: 'I hope to start a ministry for young women and become a discipler myself.',
-      disciplingExperience: 'Mentored 3 young women in the past 2 years'
-    },
-    {
-      id: 6,
-      name: 'James Wilson',
-      age: 29,
-      gender: 'Male',
-      church: 'Calvary Chapel',
-      location: 'Aurora, IL',
-      preference: 'be-discipled',
-      lookingFor: 'Seeking a mentor who can help me grow in evangelism and discipleship.',
-      future: 'I want to be equipped to make disciples and share the gospel effectively.',
-      disciplingExperience: 'None yet'
-    },
-    {
-      id: 7,
-      name: 'Robert Kim',
-      age: 38,
-      gender: 'Male',
-      church: 'Grace Community Church',
-      location: 'Springfield, IL',
-      preference: 'disciple',
-      lookingFor: 'Ready to mentor someone in their faith journey and help them grow spiritually.',
-      future: 'I want to invest in the next generation of believers and help them become strong disciples.',
-      disciplingExperience: 'Discipled 8 people over 10 years'
-    },
-    {
-      id: 8,
-      name: 'Lisa Anderson',
-      age: 26,
-      gender: 'Female',
-      church: 'Hope Fellowship',
-      location: 'Peoria, IL',
-      preference: 'accountability',
-      lookingFor: 'Looking for an accountability partner to help me stay consistent in my spiritual disciplines.',
-      future: 'I want to grow in consistency and have someone to walk alongside me in my faith journey.',
-      disciplingExperience: 'None'
-    }
-  ]
 
-  // Filter matches based on user preferences
+  // Filter matches based on user preferences (filtering is mostly done server-side, but we can do additional client-side filtering)
   const matches = useMemo(() => {
-    let filtered = allMatches
-
-    // Filter by preference (disciple/be-discipled/accountability)
-    if (profile.preference) {
-      filtered = filtered.filter(match => {
-        if (profile.preference === 'disciple') {
-          return match.preference === 'be-discipled'
-        } else if (profile.preference === 'be-discipled') {
-          return match.preference === 'disciple'
-        } else if (profile.preference === 'accountability') {
-          return match.preference === 'accountability'
-        }
-        return true
-      })
-    }
-
-    // Filter by gender preference
-    if (profile.matchmakingGenderPreference) {
-      filtered = filtered.filter(match => 
-        match.gender.toLowerCase() === profile.matchmakingGenderPreference.toLowerCase()
-      )
-    }
-
-    // Filter by age range
-    if (profile.matchmakingMinAge) {
-      const minAge = parseInt(profile.matchmakingMinAge)
-      filtered = filtered.filter(match => match.age >= minAge)
-    }
-
-    if (profile.matchmakingMaxAge) {
-      const maxAge = parseInt(profile.matchmakingMaxAge)
-      filtered = filtered.filter(match => match.age <= maxAge)
-    }
-
-    return filtered
-  }, [profile.preference, profile.matchmakingGenderPreference, profile.matchmakingMinAge, profile.matchmakingMaxAge, allMatches])
+    return allMatches
+  }, [allMatches])
 
   const handleRequestMatchClick = (match) => {
     setSelectedMatch(match)
@@ -212,7 +151,7 @@ function Matchmaking() {
       id: Date.now(),
       userId: selectedMatch.id,
       name: selectedMatch.name,
-      email: `${selectedMatch.name.toLowerCase().replace(' ', '.')}@example.com`,
+      email: selectedMatch.email || '',
       preference: selectedMatch.preference,
       relationshipType: getRelationshipType(),
       message: requestMessage.trim() || ''
@@ -281,7 +220,6 @@ function Matchmaking() {
                 <option value="">Any Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
-                <option value="other">Other</option>
               </select>
             </div>
 
@@ -322,7 +260,12 @@ function Matchmaking() {
         )}
 
         <div className="matches-feed">
-          {matches.map((match) => (
+          {loading ? (
+            <div className="loading-message">Loading matches...</div>
+          ) : matches.length === 0 ? (
+            <div className="no-matches-message">No matches found. Try adjusting your filters.</div>
+          ) : (
+            matches.map((match) => (
             <div key={match.id} className="match-card">
               <div className="match-content">
                 <div className="match-header">
@@ -332,20 +275,9 @@ function Matchmaking() {
                   <div className="match-info">
                     <h3 className="match-name">{match.name}</h3>
                     <div className="match-details">
-                      <span className="match-age">{match.age} years old</span>
                       <span className="match-gender">{match.gender}</span>
                     </div>
                   </div>
-                </div>
-
-                <div className="match-location">
-                  <FaMapMarkerAlt />
-                  <span>{match.location}</span>
-                </div>
-
-                <div className="match-church">
-                  <FaChurch />
-                  <span>{match.church}</span>
                 </div>
 
                 <div className="match-section">
@@ -382,7 +314,8 @@ function Matchmaking() {
                 </button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Modal for expanded view */}
@@ -402,23 +335,12 @@ function Matchmaking() {
                   <div className="modal-header-info">
                     <h2>{match.name}</h2>
                     <div className="match-details">
-                      <span>{match.age} years old</span>
                       <span>{match.gender}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="modal-body">
-                  <div className="modal-section">
-                    <div className="modal-info-row">
-                      <FaMapMarkerAlt />
-                      <span>{match.location}</span>
-                    </div>
-                    <div className="modal-info-row">
-                      <FaChurch />
-                      <span>{match.church}</span>
-                    </div>
-                  </div>
 
                   <div className="modal-section">
                     <h4>What they're looking for:</h4>

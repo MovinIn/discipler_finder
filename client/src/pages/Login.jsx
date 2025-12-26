@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useChurches } from '../context/ChurchesContext'
 import './Login.css'
 
 function Login() {
@@ -9,7 +10,10 @@ function Login() {
     email: '',
     password: '',
     confirmPassword: '',
-    name: ''
+    name: '',
+    dateOfBirth: '',
+    gender: '',
+    church: ''
   })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -17,6 +21,7 @@ function Login() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { login, createAccount } = useAuth()
+  const { churches } = useChurches()
   const navigate = useNavigate()
 
   const handleChange = (e) => {
@@ -60,10 +65,17 @@ function Login() {
         return
       }
 
-      const result = await createAccount(formData.email, formData.password)
+      const result = await createAccount(
+        formData.email, 
+        formData.password, 
+        formData.name, 
+        formData.dateOfBirth, 
+        formData.gender,
+        formData.church
+      )
       if (result.success) {
         setSuccess(result.message || 'Account created! Please check your email for activation instructions.')
-        setFormData({ email: '', password: '', confirmPassword: '', name: '' })
+        setFormData({ email: '', password: '', confirmPassword: '', name: '', dateOfBirth: '', gender: '', church: '' })
         // Switch to login after 3 seconds
         setTimeout(() => {
           setIsLogin(true)
@@ -173,18 +185,66 @@ function Login() {
 
           <form onSubmit={handleSubmit} className="login-form">
             {!isLogin && (
-              <div className="form-group">
-                <label htmlFor="name">Full Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter your full name"
-                  required={!isLogin}
-                />
-              </div>
+              <>
+                <div className="form-group">
+                  <label htmlFor="name">Full Name</label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name"
+                    required={!isLogin}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="dateOfBirth">Date of Birth</label>
+                  <input
+                    type="date"
+                    id="dateOfBirth"
+                    name="dateOfBirth"
+                    value={formData.dateOfBirth}
+                    onChange={handleChange}
+                    required={!isLogin}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="gender">Gender</label>
+                  <select
+                    id="gender"
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    required={!isLogin}
+                  >
+                    <option value="">-- Select gender --</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="church">Church</label>
+                  <select
+                    id="church"
+                    name="church"
+                    value={formData.church}
+                    onChange={handleChange}
+                    required={!isLogin}
+                    className="church-select"
+                  >
+                    <option value="">-- Select a church --</option>
+                    {churches && churches.map((church) => (
+                      <option key={church.id} value={church.name}>
+                        {church.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="form-group">

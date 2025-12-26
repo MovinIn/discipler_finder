@@ -207,7 +207,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-right: 0.5rem;
+  margin-right: 1rem;
 }
 
 .resend-btn:hover:not(:disabled),

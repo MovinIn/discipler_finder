@@ -1,52 +1,34 @@
 import { FaChurch, FaCross, FaPrayingHands } from 'react-icons/fa'
+import { useChurches } from '../context/ChurchesContext'
 import './Partnerships.css'
 
 function Partnerships() {
-  // Sample church data - in a real app, this would come from an API
-  const churches = [
-    {
-      id: 1,
-      name: 'Grace Community Church',
-      location: 'Springfield, IL',
-      icon: FaChurch,
-      description: 'A welcoming community focused on discipleship and spiritual growth.'
-    },
-    {
-      id: 2,
-      name: 'Faith Baptist Church',
-      location: 'Chicago, IL',
-      icon: FaCross,
-      description: 'Committed to biblical teaching and authentic relationships.'
-    },
-    {
-      id: 3,
-      name: 'Hope Fellowship',
-      location: 'Peoria, IL',
-      icon: FaPrayingHands,
-      description: 'Building disciples who make disciples in our community.'
-    },
-    {
-      id: 4,
-      name: 'Living Word Church',
-      location: 'Rockford, IL',
-      icon: FaChurch,
-      description: 'Empowering believers to grow in faith and serve others.'
-    },
-    {
-      id: 5,
-      name: 'Victory Christian Center',
-      location: 'Naperville, IL',
-      icon: FaCross,
-      description: 'A vibrant community dedicated to spiritual transformation.'
-    },
-    {
-      id: 6,
-      name: 'Calvary Chapel',
-      location: 'Aurora, IL',
-      icon: FaPrayingHands,
-      description: 'Teaching God\'s Word and fostering deep discipleship relationships.'
+  const { churches, loading } = useChurches()
+
+  // Map icon codes to icon components
+  const getIcon = (imgCode) => {
+    switch (imgCode) {
+      case 'church':
+        return FaChurch
+      case 'cross':
+        return FaCross
+      case 'praying':
+        return FaPrayingHands
+      default:
+        return FaChurch
     }
-  ]
+  }
+
+  if (loading) {
+    return (
+      <div className="partnerships-page">
+        <div className="container">
+          <h1>Partner Churches</h1>
+          <p>Loading churches...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="partnerships-page">
@@ -59,15 +41,15 @@ function Partnerships() {
         
         <div className="churches-grid">
           {churches.map((church) => {
-            const IconComponent = church.icon
+            const IconComponent = getIcon(church.img_code)
             return (
               <div key={church.id} className="church-card">
                 <div className="church-icon">
                   <IconComponent />
                 </div>
                 <h3 className="church-name">{church.name}</h3>
-                <p className="church-location">{church.location}</p>
-                <p className="church-description">{church.description}</p>
+                <p className="church-location">{church.address}</p>
+                <p className="church-description">{church.splash_text}</p>
               </div>
             )
           })}

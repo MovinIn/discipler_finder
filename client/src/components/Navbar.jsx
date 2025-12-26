@@ -252,11 +252,11 @@ function Navbar() {
               </li>
               <li className="navbar-item">
                 <Link 
-                  to="/received-requests" 
-                  className={`navbar-link ${isActive('/received-requests')}`}
+                  to="/posts" 
+                  className={`navbar-link ${isActive('/posts')}`}
                   onClick={closeMenu}
                 >
-                  Received Requests
+                  Posts
                 </Link>
               </li>
               <li className="navbar-item">

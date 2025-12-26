@@ -1,40 +1,78 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useProfile } from '../context/ProfileContext'
+import { useChurches } from '../context/ChurchesContext'
+import { useAuth } from '../context/AuthContext'
 import './Profile.css'
+
+const API_BASE_URL = 'http://localhost:8080/api'
 
 function Profile() {
   const { profile, updateProfile } = useProfile()
+  const { churches } = useChurches()
+  const { user } = useAuth()
   const [formData, setFormData] = useState({
-    church: profile.church || '',
-    dateOfBirth: profile.dateOfBirth || '',
-    gender: profile.gender || '',
-    lookingFor: profile.lookingFor || '',
-    future: profile.future || '',
-    disciplingExperience: profile.disciplingExperience || ''
+    email: '',
+    church: '',
+    dateOfBirth: '',
+    gender: ''
   })
   const [isSaved, setIsSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const lastUserIdRef = useRef(null)
 
-  // Sample churches - matching the churches from Partnerships page
-  const churches = [
-    'Grace Community Church',
-    'Faith Baptist Church',
-    'Hope Fellowship',
-    'Living Word Church',
-    'Victory Christian Center',
-    'Calvary Chapel'
-  ]
+  // Convert YYYY-MM-DD to MM/DD/YYYY
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return ''
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${month}/${day}/${year}`
+  }
+
+  // Convert MM/DD/YYYY to YYYY-MM-DD
+  const formatDateForAPI = (dateString) => {
+    if (!dateString) return ''
+    const match = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (!match) return ''
+    const [, month, day, year] = match
+    return `${year}-${month}-${day}`
+  }
 
   useEffect(() => {
-    // Load profile data when component mounts or profile changes
-    setFormData({
-      church: profile.church || '',
-      dateOfBirth: profile.dateOfBirth || '',
-      gender: profile.gender || '',
-      lookingFor: profile.lookingFor || '',
-      future: profile.future || '',
-      disciplingExperience: profile.disciplingExperience || ''
-    })
-  }, [profile])
+    // Load profile data from user.profile (from login response)
+    // Only re-initialize if user changes (login/logout) or if we haven't initialized yet
+    const currentUserId = user?.profile?.id
+    
+    if (user && user.profile && currentUserId !== lastUserIdRef.current) {
+      const email = user.profile.email || ''
+      const church = user.profile.church || ''
+      const dateOfBirth = user.profile.dob ? formatDateForDisplay(user.profile.dob) : ''
+      const gender = user.profile.gender || ''
+      
+      setFormData({ email, church, dateOfBirth, gender })
+      lastUserIdRef.current = currentUserId
+    } else if (!user && profile && lastUserIdRef.current !== null) {
+      // User logged out, reset
+      lastUserIdRef.current = null
+      setFormData({
+        email: profile.email || '',
+        church: profile.church || '',
+        dateOfBirth: profile.dateOfBirth || '',
+        gender: profile.gender || ''
+      })
+    } else if (!user && !lastUserIdRef.current && profile) {
+      // Initial load without user (shouldn't happen, but handle gracefully)
+      setFormData({
+        email: profile.email || '',
+        church: profile.church || '',
+        dateOfBirth: profile.dateOfBirth || '',
+        gender: profile.gender || ''
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.profile?.id, user?.profile?.email, user?.profile?.church, user?.profile?.dob, user?.profile?.gender])
 
   const formatDateInput = (value) => {
     // Check if input ends with a slash (user is trying to move to next section)
@@ -157,15 +195,68 @@ function Profile() {
     setIsSaved(false)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    updateProfile(formData)
-    setIsSaved(true)
     
-    // Hide saved message after 3 seconds
-    setTimeout(() => {
-      setIsSaved(false)
-    }, 3000)
+    if (!user || !user.profile || !user.session_id) {
+      alert('You must be logged in to update your profile')
+      return
+    }
+
+    // Validate date
+    if (!validateDate(formData.dateOfBirth)) {
+      alert('Please enter a valid date of birth')
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
+      const formDataToSend = new URLSearchParams()
+      formDataToSend.append('action', 'update_profile')
+      formDataToSend.append('id', user.profile.id)
+      formDataToSend.append('session_id', user.session_id)
+      formDataToSend.append('email', formData.email)
+      formDataToSend.append('dob', formatDateForAPI(formData.dateOfBirth))
+      formDataToSend.append('church', formData.church)
+      formDataToSend.append('gender', formData.gender)
+
+      const response = await fetch(`${API_BASE_URL}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formDataToSend.toString()
+      })
+
+      const result = await response.json()
+
+      if (response.status >= 200 && response.status < 300) {
+        // Update local state
+        updateProfile(formData)
+        // Update user object in AuthContext
+        if (user) {
+          user.profile = {
+            ...user.profile,
+            email: formData.email,
+            church: formData.church,
+            dob: formatDateForAPI(formData.dateOfBirth),
+            gender: formData.gender
+          }
+        }
+        setIsSaved(true)
+        setTimeout(() => {
+          setIsSaved(false)
+        }, 3000)
+      } else {
+        alert(result.message || 'Failed to update profile')
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      alert('Failed to update profile')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -186,6 +277,21 @@ function Profile() {
 
           <form onSubmit={handleSubmit} className="profile-form">
             <div className="form-group">
+              <label htmlFor="email">
+                Email <span className="required-star">*</span>
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                className="email-input"
+              />
+            </div>
+
+            <div className="form-group">
               <label htmlFor="church">
                 Church <span className="required-star">*</span>
               </label>
@@ -198,9 +304,9 @@ function Profile() {
                 className="church-select"
               >
                 <option value="">-- Select a church --</option>
-                {churches.map((church, index) => (
-                  <option key={index} value={church}>
-                    {church}
+                {churches && churches.map((church) => (
+                  <option key={church.id} value={church.name}>
+                    {church.name}
                   </option>
                 ))}
               </select>
@@ -238,51 +344,13 @@ function Profile() {
                 required
               >
                 <option value="">-- Select gender --</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-                <option value="prefer-not-to-say">Prefer not to say</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
               </select>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="lookingFor">What do you look for?</label>
-              <textarea
-                id="lookingFor"
-                name="lookingFor"
-                value={formData.lookingFor}
-                onChange={handleChange}
-                placeholder="Describe what you're looking for in a discipling relationship..."
-                rows="4"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="future">What do you want from this?</label>
-              <textarea
-                id="future"
-                name="future"
-                value={formData.future}
-                onChange={handleChange}
-                placeholder="Share your goals and what you hope to gain from this experience..."
-                rows="4"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="disciplingExperience">Discipling Experience</label>
-              <textarea
-                id="disciplingExperience"
-                name="disciplingExperience"
-                value={formData.disciplingExperience}
-                onChange={handleChange}
-                placeholder="Describe your prior experience discipling someone else, if any..."
-                rows="4"
-              />
-            </div>
-
-            <button type="submit" className="submit-btn">
-              Save Profile
+            <button type="submit" className="submit-btn" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save Profile'}
             </button>
           </form>
         </div>

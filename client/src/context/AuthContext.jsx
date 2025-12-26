@@ -59,12 +59,16 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const createAccount = async (email, password) => {
+  const createAccount = async (email, password, name, dob, gender, church) => {
     try {
       const formData = new URLSearchParams()
       formData.append('action', 'create_account')
       formData.append('email', email)
       formData.append('password', password)
+      formData.append('name', name)
+      formData.append('dob', dob)
+      formData.append('gender', gender)
+      formData.append('church', church)
 
       const response = await fetch(`${API_BASE_URL}`, {
         method: 'POST',
