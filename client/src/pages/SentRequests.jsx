@@ -9,7 +9,7 @@ function SentRequests() {
   const navigate = useNavigate()
   const { profile } = useProfile()
   const { addChat, getChatByUserId } = useChat()
-  const { sentRequests } = useRequests()
+  const { sentRequests, loading } = useRequests()
 
   const getRelationshipType = () => {
     // Based on user's own preference when they sent the request
@@ -51,6 +51,17 @@ function SentRequests() {
         navigate(`/chat/${newChat.id}`)
       }
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="sent-requests-page">
+        <div className="sent-requests-container">
+          <h1>Sent Requests</h1>
+          <p>Loading sent requests...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useProfile } from '../context/ProfileContext'
+import { useAuth } from '../context/AuthContext'
 import './GetStarted.css'
+
+const API_BASE_URL = 'http://localhost:8080/api'
 
 function GetStarted() {
   const navigate = useNavigate()
   const { profile, updateProfile } = useProfile()
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
-    church: profile.church || '',
     preference: profile.preference || '',
-    age: profile.age || '',
-    gender: profile.gender || '',
     lookingFor: profile.lookingFor || '',
     future: profile.future || '',
     disciplingExperience: profile.disciplingExperience || ''
@@ -20,26 +21,12 @@ function GetStarted() {
   // Update form data when profile changes
   useEffect(() => {
     setFormData({
-      church: profile.church || '',
       preference: profile.preference || '',
-      age: profile.age || '',
-      gender: profile.gender || '',
       lookingFor: profile.lookingFor || '',
       future: profile.future || '',
       disciplingExperience: profile.disciplingExperience || ''
     })
   }, [profile])
-
-  // Sample churches - in a real app, this would come from an API
-  // Matching the churches from Partnerships page
-  const churches = [
-    'Grace Community Church',
-    'Faith Baptist Church',
-    'Hope Fellowship',
-    'Living Word Church',
-    'Victory Christian Center',
-    'Calvary Chapel'
-  ]
 
   const handleChange = (e) => {
     setFormData({
@@ -48,33 +35,57 @@ function GetStarted() {
     })
   }
 
-  const handleChurchSubmit = (e) => {
-    e.preventDefault()
-    if (formData.church) {
-      setStep(2)
-    }
-  }
-
   const handlePreferenceSubmit = (e) => {
     e.preventDefault()
     if (formData.preference) {
-      setStep(3)
+      setStep(2)
     }
   }
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault()
-    // Save to profile context
-    updateProfile(formData)
-    // In a real app, this would submit to an API
-    console.log('Form submitted:', formData)
-    navigate('/thank-you')
+
+    if (!user || !user.profile || !user.session_id) {
+      alert('You must be logged in to submit your post')
+      return
+    }
+
+    try {
+      const formDataToSend = new URLSearchParams()
+      formDataToSend.append('action', 'send_post')
+      formDataToSend.append('id', user.profile.id.toString())
+      formDataToSend.append('session_id', user.session_id)
+      formDataToSend.append('type', mapPreferenceToBackendType(formData.preference))
+      formDataToSend.append('requirements', formData.lookingFor)
+      formDataToSend.append('goals', formData.future)
+      formDataToSend.append('experience', formData.disciplingExperience || '')
+
+      const response = await fetch(`${API_BASE_URL}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formDataToSend.toString()
+      })
+
+      const result = await response.json()
+
+      if (response.status >= 200 && response.status < 300) {
+        // Save to profile context
+        updateProfile(formData)
+        // Navigate to thank you page
+        navigate('/thank-you')
+      } else {
+        alert(result.message || 'Failed to submit your post')
+      }
+    } catch (error) {
+      console.error('Error submitting post:', error)
+      alert('Failed to submit your post. Please try again.')
+    }
   }
 
   const handleBack = () => {
-    if (step === 3) {
-      setStep(2)
-    } else if (step === 2) {
+    if (step === 2) {
       setStep(1)
     }
   }
@@ -107,6 +118,20 @@ function GetStarted() {
 
   const placeholders = getPlaceholders()
 
+  // Map frontend preference to backend post type
+  const mapPreferenceToBackendType = (preference) => {
+    switch (preference) {
+      case 'disciple':
+        return 'M' // User wants to disciple, so they're a Mentor
+      case 'be-discipled':
+        return 'D' // User wants to be discipled, so they're a Disciple
+      case 'accountability':
+        return 'A' // User wants accountability, so they're an Accountability partner
+      default:
+        return 'M'
+    }
+  }
+
   return (
     <div className="get-started-page">
       <div className="get-started-container">
@@ -114,53 +139,16 @@ function GetStarted() {
           <div className="step-indicator">
             <div className={`step ${step >= 1 ? 'active' : ''}`}>
               <span className="step-number">1</span>
-              <span className="step-label">Church</span>
+              <span className="step-label">Preference</span>
             </div>
             <div className={`step-line ${step >= 2 ? 'active' : ''}`}></div>
             <div className={`step ${step >= 2 ? 'active' : ''}`}>
               <span className="step-number">2</span>
-              <span className="step-label">Preference</span>
-            </div>
-            <div className={`step-line ${step >= 3 ? 'active' : ''}`}></div>
-            <div className={`step ${step >= 3 ? 'active' : ''}`}>
-              <span className="step-number">3</span>
               <span className="step-label">Profile</span>
             </div>
           </div>
 
           {step === 1 && (
-            <div className="step-content">
-              <h1>Select Your Church</h1>
-              <p className="step-description">
-                Choose the church you're associated with to get started.
-              </p>
-              <form onSubmit={handleChurchSubmit} className="church-form">
-                <div className="form-group">
-                  <label htmlFor="church">Church</label>
-                  <select
-                    id="church"
-                    name="church"
-                    value={formData.church}
-                    onChange={handleChange}
-                    required
-                    className="church-select"
-                  >
-                    <option value="">-- Select a church --</option>
-                    {churches.map((church, index) => (
-                      <option key={index} value={church}>
-                        {church}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button type="submit" className="submit-btn">
-                  Continue
-                </button>
-              </form>
-            </div>
-          )}
-
-          {step === 2 && (
             <div className="step-content">
               <h1>What Are You Looking For?</h1>
               <p className="step-description">
@@ -214,9 +202,6 @@ function GetStarted() {
                   </label>
                 </div>
                 <div className="form-actions">
-                  <button type="button" onClick={() => setStep(1)} className="back-btn">
-                    Back
-                  </button>
                   <button type="submit" className="submit-btn">
                     Continue
                   </button>
@@ -225,45 +210,13 @@ function GetStarted() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 2 && (
             <div className="step-content">
               <h1>Tell Us About Yourself</h1>
               <p className="step-description">
                 Help us match you with the right discipling relationship.
               </p>
               <form onSubmit={handleFormSubmit} className="profile-form">
-                <div className="form-group">
-                  <label htmlFor="age">Age</label>
-                  <input
-                    type="number"
-                    id="age"
-                    name="age"
-                    value={formData.age}
-                    onChange={handleChange}
-                    placeholder="Enter your age"
-                    min="13"
-                    max="120"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="gender">Gender</label>
-                  <select
-                    id="gender"
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="">-- Select gender --</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                    <option value="prefer-not-to-say">Prefer not to say</option>
-                  </select>
-                </div>
-
                 <div className="form-group">
                   <label htmlFor="lookingFor">What do you look for?</label>
                   <textarea
@@ -290,19 +243,17 @@ function GetStarted() {
                   />
                 </div>
 
-                {formData.preference === 'disciple' && (
-                  <div className="form-group">
-                    <label htmlFor="disciplingExperience">Discipling Experience</label>
-                    <textarea
-                      id="disciplingExperience"
-                      name="disciplingExperience"
-                      value={formData.disciplingExperience}
-                      onChange={handleChange}
-                      placeholder="Describe your prior experience discipling someone else..."
-                      rows="4"
-                    />
-                  </div>
-                )}
+                <div className="form-group">
+                  <label htmlFor="disciplingExperience">Discipling Experience</label>
+                  <textarea
+                    id="disciplingExperience"
+                    name="disciplingExperience"
+                    value={formData.disciplingExperience}
+                    onChange={handleChange}
+                    placeholder="Describe your prior experience discipling someone else..."
+                    rows="4"
+                  />
+                </div>
 
                 <div className="form-actions">
                   <button type="button" onClick={handleBack} className="back-btn">

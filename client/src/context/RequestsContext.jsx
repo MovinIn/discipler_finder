@@ -1,49 +1,112 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { useAuth } from './AuthContext'
 
 const RequestsContext = createContext()
+const API_BASE_URL = 'http://localhost:8080/api'
 
 export function RequestsProvider({ children }) {
-  const [sentRequests, setSentRequests] = useState([
-    {
-      id: 1,
-      userId: 2,
-      name: 'Michael Chen',
-      email: 'michael.chen@example.com',
-      preference: 'be-discipled',
-      relationshipType: 'Mentor',
-      message: 'Hi! I saw your profile and would love to connect with you.'
-    },
-    {
-      id: 2,
-      userId: 3,
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@example.com',
-      preference: 'disciple',
-      relationshipType: 'Disciple',
-      message: 'I think we could have a great discipling relationship!'
-    }
-  ])
+  const { user } = useAuth()
+  const [sentRequests, setSentRequests] = useState([])
+  const [receivedRequests, setReceivedRequests] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const [receivedRequests, setReceivedRequests] = useState([
-    {
-      id: 1,
-      userId: 4,
-      name: 'David Thompson',
-      email: 'david.thompson@example.com',
-      preference: 'be-discipled',
-      relationshipType: 'Mentor',
-      message: 'Hello! I would love to be mentored by you.'
-    },
-    {
-      id: 2,
-      userId: 6,
-      name: 'James Wilson',
-      email: 'james.wilson@example.com',
-      preference: 'disciple',
-      relationshipType: 'Disciple',
-      message: 'I think you would be a great disciple!'
+  // Fetch sent requests from API
+  useEffect(() => {
+    const fetchSentRequests = async () => {
+      if (!user || !user.profile || !user.session_id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const formData = new URLSearchParams()
+        formData.append('action', 'get_sent_requests')
+        formData.append('id', user.profile.id.toString())
+        formData.append('session_id', user.session_id)
+
+        const response = await fetch(`${API_BASE_URL}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        })
+
+        if (response.status >= 200 && response.status < 300) {
+          const requestsData = await response.json()
+
+          // Transform API response to match frontend structure
+          const transformedRequests = requestsData.map(request => ({
+            id: request.request_id,
+            userId: request.profile.id,
+            name: request.profile.name,
+            email: request.profile.email,
+            type: request.type,
+            message: request.message || '',
+            requested_at: request.requested_at
+          }))
+
+          setSentRequests(transformedRequests)
+        } else {
+          console.error('Failed to fetch sent requests')
+        }
+      } catch (error) {
+        console.error('Error fetching sent requests:', error)
+      }
     }
-  ])
+
+    fetchSentRequests()
+  }, [user])
+
+  // Fetch received requests from API
+  useEffect(() => {
+    const fetchReceivedRequests = async () => {
+      if (!user || !user.profile || !user.session_id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const formData = new URLSearchParams()
+        formData.append('action', 'get_received_requests')
+        formData.append('id', user.profile.id.toString())
+        formData.append('session_id', user.session_id)
+
+        const response = await fetch(`${API_BASE_URL}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        })
+
+        if (response.status >= 200 && response.status < 300) {
+          const requestsData = await response.json()
+
+          // Transform API response to match frontend structure
+          const transformedRequests = requestsData.map(request => ({
+            id: request.request_id,
+            userId: request.profile.id,
+            name: request.profile.name,
+            email: request.profile.email,
+            type: request.type,
+            message: request.message || '',
+            requested_at: request.requested_at
+          }))
+
+          setReceivedRequests(transformedRequests)
+        } else {
+          console.error('Failed to fetch received requests')
+        }
+      } catch (error) {
+        console.error('Error fetching received requests:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReceivedRequests()
+  }, [user])
 
   const addSentRequest = (request) => {
     setSentRequests(prev => [...prev, request])
@@ -65,6 +128,7 @@ export function RequestsProvider({ children }) {
     <RequestsContext.Provider value={{
       sentRequests,
       receivedRequests,
+      loading,
       addSentRequest,
       removeSentRequest,
       addReceivedRequest,

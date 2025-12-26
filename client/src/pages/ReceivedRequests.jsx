@@ -9,7 +9,7 @@ function ReceivedRequests() {
   const navigate = useNavigate()
   const { profile } = useProfile()
   const { addChat, getChatByUserId } = useChat()
-  const { receivedRequests, removeReceivedRequest } = useRequests()
+  const { receivedRequests, removeReceivedRequest, loading } = useRequests()
   const requests = receivedRequests
 
   const getRelationshipType = (requestPreference) => {
@@ -79,6 +79,17 @@ function ReceivedRequests() {
         navigate(`/chat/${newChat.id}`)
       }
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="received-requests-page">
+        <div className="received-requests-container">
+          <h1>Received Requests</h1>
+          <p>Loading received requests...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
