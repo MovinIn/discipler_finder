@@ -54,6 +54,18 @@
   margin-left: auto;
 }
 
+/* Ensure sign out button is always visible on desktop */
+@media (min-width: 1025px) {
+  .navbar-item-right {
+    display: block !important;
+  }
+
+  .sign-out-btn {
+    display: block !important;
+    visibility: visible !important;
+  }
+}
+
 .dropdown-item {
   position: relative;
 }
@@ -175,6 +187,10 @@
   font-size: inherit;
   text-align: left;
   width: 100%;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 1000;
+  position: relative;
 }
 
 .sign-out-btn:hover {

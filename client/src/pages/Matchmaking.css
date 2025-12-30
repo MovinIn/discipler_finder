@@ -165,7 +165,7 @@
   background-color: #2a2a2a;
   border: 1px solid #333;
   border-radius: 12px;
-  padding: 2rem;
+  padding: 1.5rem 2rem 2rem 2rem;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -188,7 +188,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .match-avatar {
@@ -208,10 +208,49 @@
   flex: 1;
 }
 
+.match-primary-info {
+  margin-bottom: 0.75rem;
+}
+
 .match-name {
   font-size: 1.5rem;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.25rem 0;
   color: #fff;
+}
+
+.match-email {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+}
+
+.match-secondary-info {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #646cff;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.match-type-request-large {
+  font-size: 1rem;
+  color: #b0b0b0;
+  margin-top: -0.25rem;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.match-type-request-large .match-type-text {
+  color: #646cff;
+}
+
+.match-gender,
+.match-age {
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(100, 108, 255, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(100, 108, 255, 0.2);
 }
 
 .match-details {
@@ -475,10 +514,45 @@
   border-bottom: 1px solid #333;
 }
 
-.modal-header-info h2 {
+.modal-header-info .match-primary-info h2 {
   font-size: 1.75rem;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.25rem 0;
   color: #fff;
+}
+
+.modal-header-info .match-primary-info .match-email {
+  font-size: 1rem;
+  color: #b0b0b0;
+}
+
+.modal-header-info .match-secondary-info {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #646cff;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.modal-header-info .match-secondary-info .match-gender,
+.modal-header-info .match-secondary-info .match-age {
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(100, 108, 255, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(100, 108, 255, 0.2);
+}
+
+.modal-body .match-type-request-large {
+  font-size: 1rem;
+  color: #b0b0b0;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.modal-body .match-type-request-large .match-type-text {
+  color: #646cff;
 }
 
 .modal-body {

@@ -13,6 +13,7 @@ public class Profile {
   private final Date dob;
   private final String church;
   private final String gender;
+  private final String name;
   private final Timestamp created_at;
 
   private Profile(Builder builder) {
@@ -22,6 +23,7 @@ public class Profile {
     this.church = builder.church;
     this.gender = builder.gender;
     this.created_at = builder.created_at;
+    this.name = builder.name;
   }
 
   // Getters for required fields
@@ -31,6 +33,10 @@ public class Profile {
 
   public String getEmail() {
     return email;
+  }
+
+  public String getName() {
+    return name;
   }
 
   // Optional field getters using Java 8 Optional
@@ -54,7 +60,7 @@ public class Profile {
     // Required fields
     private Integer id;
     private String email;
-
+    private String name;
     // Optional fields
     private Date dob;
     private String church;
@@ -68,6 +74,11 @@ public class Profile {
 
     public Builder email(String email) {
       this.email = email;
+      return this;
+    }
+
+    public Builder name(String name) {
+      this.name = name;
       return this;
     }
 
@@ -92,8 +103,8 @@ public class Profile {
     }
 
     public Profile build() {
-      if (id == null || email == null) {
-        throw new IllegalStateException("id and email are required fields");
+      if (id == null || email == null || name == null) {
+        throw new IllegalStateException("id, email, and name are required fields");
       }
       return new Profile(this);
     }

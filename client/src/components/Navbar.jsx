@@ -10,7 +10,7 @@ function Navbar() {
   const [isHomeDropdownOpen, setIsHomeDropdownOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { isLoggedIn, logout } = useAuth()
+  const { isLoggedIn, logout, user } = useAuth()
   const { clearProfile } = useProfile()
   const dropdownRef = useRef(null)
 
@@ -36,8 +36,38 @@ function Navbar() {
     return homePaths.includes(location.pathname)
   }
 
-  const handleSignOut = () => {
-    logout()
+  const handleSignOut = async () => {
+    // Get user data from localStorage
+    const storedUser = localStorage.getItem('user')
+    const storedSessionId = localStorage.getItem('session_id')
+    
+    // Call signout API directly
+    if (storedUser && storedSessionId) {
+      try {
+        const parsedUser = JSON.parse(storedUser)
+        const userId = parsedUser?.profile?.id || parsedUser?.id
+        
+        if (userId) {
+          const formData = new URLSearchParams()
+          formData.append('action', 'signout')
+          formData.append('id', userId.toString())
+          formData.append('session_id', storedSessionId)
+          
+          await fetch('http://localhost:8080/api', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+          })
+        }
+      } catch (error) {
+        console.error('Signout API error:', error)
+      }
+    }
+    
+    // Call the logout function to clear local state
+    await logout()
     clearProfile()
     navigate('/')
     closeMenu()
@@ -93,8 +123,8 @@ function Navbar() {
                 onMouseEnter={() => !isMenuOpen && setIsHomeDropdownOpen(true)}
                 onMouseLeave={() => !isMenuOpen && setIsHomeDropdownOpen(false)}
               >
-                <Link 
-                  to="/" 
+                <Link
+                  to="/"
                   onClick={() => {
                     closeMenu()
                     closeHomeDropdown()
@@ -117,14 +147,14 @@ function Navbar() {
                   <FaChevronDown className="dropdown-icon" />
                 </button>
               </div>
-              <ul 
+              <ul
                 className={`dropdown-menu ${isHomeDropdownOpen ? 'open' : ''}`}
                 onMouseEnter={() => !isMenuOpen && setIsHomeDropdownOpen(true)}
                 onMouseLeave={() => !isMenuOpen && setIsHomeDropdownOpen(false)}
               >
                 <li>
-                  <Link 
-                    to="/" 
+                  <Link
+                    to="/"
                     className={`dropdown-link ${isActive('/')}`}
                     onClick={() => {
                       closeMenu()
@@ -135,8 +165,8 @@ function Navbar() {
                   </Link>
                 </li>
                 <li>
-                  <Link 
-                    to="/purpose" 
+                  <Link
+                    to="/purpose"
                     className={`dropdown-link ${isActive('/purpose')}`}
                     onClick={() => {
                       closeMenu()
@@ -147,8 +177,8 @@ function Navbar() {
                   </Link>
                 </li>
                 <li>
-                  <Link 
-                    to="/partnerships" 
+                  <Link
+                    to="/partnerships"
                     className={`dropdown-link ${isActive('/partnerships')}`}
                     onClick={() => {
                       closeMenu()
@@ -159,8 +189,8 @@ function Navbar() {
                   </Link>
                 </li>
                 <li>
-                  <Link 
-                    to="/download" 
+                  <Link
+                    to="/download"
                     className={`dropdown-link ${isActive('/download')}`}
                     onClick={() => {
                       closeMenu()
@@ -175,8 +205,8 @@ function Navbar() {
           ) : (
             <>
               <li className="navbar-item">
-                <Link 
-                  to="/" 
+                <Link
+                  to="/"
                   className={`navbar-link ${isActive('/')}`}
                   onClick={closeMenu}
                 >
@@ -184,8 +214,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/purpose" 
+                <Link
+                  to="/purpose"
                   className={`navbar-link ${isActive('/purpose')}`}
                   onClick={closeMenu}
                 >
@@ -193,8 +223,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/partnerships" 
+                <Link
+                  to="/partnerships"
                   className={`navbar-link ${isActive('/partnerships')}`}
                   onClick={closeMenu}
                 >
@@ -202,8 +232,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/download" 
+                <Link
+                  to="/download"
                   className={`navbar-link ${isActive('/download')}`}
                   onClick={closeMenu}
                 >
@@ -215,8 +245,8 @@ function Navbar() {
           {isLoggedIn && (
             <>
               <li className="navbar-item">
-                <Link 
-                  to="/matchmaking" 
+                <Link
+                  to="/matchmaking"
                   className={`navbar-link ${isActive('/matchmaking')}`}
                   onClick={closeMenu}
                 >
@@ -224,8 +254,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/get-started" 
+                <Link
+                  to="/get-started"
                   className={`navbar-link ${isActive('/get-started')}`}
                   onClick={closeMenu}
                 >
@@ -233,8 +263,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/profile" 
+                <Link
+                  to="/profile"
                   className={`navbar-link ${isActive('/profile')}`}
                   onClick={closeMenu}
                 >
@@ -242,8 +272,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/sent-requests" 
+                <Link
+                  to="/sent-requests"
                   className={`navbar-link ${isActive('/sent-requests')}`}
                   onClick={closeMenu}
                 >
@@ -251,8 +281,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/posts" 
+                <Link
+                  to="/posts"
                   className={`navbar-link ${isActive('/posts')}`}
                   onClick={closeMenu}
                 >
@@ -260,8 +290,8 @@ function Navbar() {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link 
-                  to="/chat" 
+                <Link
+                  to="/chat"
                   className={`navbar-link ${isActive('/chat')}`}
                   onClick={closeMenu}
                 >
@@ -272,15 +302,16 @@ function Navbar() {
           )}
           <li className="navbar-item navbar-item-right">
             {isLoggedIn ? (
-              <button 
+              <button
+                type="button"
                 className="navbar-link sign-out-btn"
                 onClick={handleSignOut}
               >
                 Sign Out
               </button>
             ) : (
-              <Link 
-                to="/login" 
+              <Link
+                to="/login"
                 className={`navbar-link ${isActive('/login')}`}
                 onClick={closeMenu}
               >
@@ -295,4 +326,3 @@ function Navbar() {
 }
 
 export default Navbar
-

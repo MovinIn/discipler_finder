@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { FaComments, FaUser, FaCheck, FaTimes } from 'react-icons/fa'
+import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../context/ProfileContext'
 import { useChat } from '../context/ChatContext'
 import { useRequests } from '../context/RequestsContext'
@@ -7,6 +8,7 @@ import './ReceivedRequests.css'
 
 function ReceivedRequests() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { profile } = useProfile()
   const { addChat, getChatByUserId } = useChat()
   const { receivedRequests, removeReceivedRequest, loading } = useRequests()
@@ -22,61 +24,184 @@ function ReceivedRequests() {
     }
   }
 
-  const handleAccept = (request) => {
+  const handleAccept = async (request) => {
+    // First, accept the request in the backend
+    if (user && user.profile && user.session_id) {
+      try {
+        const acceptFormData = new URLSearchParams()
+        acceptFormData.append('action', 'accept_request')
+        acceptFormData.append('id', user.profile.id)
+        acceptFormData.append('session_id', user.session_id)
+        acceptFormData.append('request_id', request.id)
+        acceptFormData.append('requestee_id', request.userId)
+        acceptFormData.append('type', request.type || 'A')
+
+        const acceptResponse = await fetch(`http://localhost:8080/api`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: acceptFormData.toString()
+        })
+
+        if (acceptResponse.status === 404) {
+          // Request not found - remove from UI
+          removeReceivedRequest(request.id)
+          return
+        }
+
+        if (acceptResponse.status >= 200 && acceptResponse.status < 300) {
+          // Request accepted successfully
+        } else {
+          console.error('Failed to accept request')
+          return
+        }
+      } catch (error) {
+        console.error('Error accepting request:', error)
+        return
+      }
+    }
+
     // Check if chat already exists
     const existingChat = getChatByUserId(request.userId)
-    
+
     if (existingChat) {
       // Use existing chat's id for navigation
       removeReceivedRequest(request.id)
       navigate(`/chat/${existingChat.id}`)
     } else {
-      // Add chat when accepted (only if it doesn't exist)
-      const newChat = {
-        id: request.userId,
-        userId: request.userId,
-        userName: request.name,
-        userEmail: request.email,
-        lastMessage: 'Chat started',
-        lastMessageTime: 'Just now',
-        unreadCount: 0,
-        relationshipType: request.relationshipType
+      // Create chat in database first
+      if (user && user.profile && user.session_id) {
+        try {
+          const createFormData = new URLSearchParams()
+          createFormData.append('action', 'create_chat')
+          createFormData.append('id', user.profile.id)
+          createFormData.append('session_id', user.session_id)
+          createFormData.append('requestee_id', request.userId)
+
+          const createResponse = await fetch(`http://localhost:8080/api`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: createFormData.toString()
+          })
+
+          if (createResponse.status >= 200 && createResponse.status < 300) {
+            const createResult = await createResponse.json()
+            const chatId = createResult.chat_id
+
+            // Add chat locally with real chat ID
+            const newChat = {
+              id: chatId,
+              userId: request.userId,
+              userName: request.name,
+              userEmail: request.email,
+              lastMessage: 'Chat started',
+              lastMessageTime: 'Just now',
+              unreadCount: 0,
+              relationshipType: request.relationshipType
+            }
+            addChat(newChat)
+            // Remove from received requests
+            removeReceivedRequest(request.id)
+            // Navigate using the real chat's id
+            navigate(`/chat/${chatId}`)
+          } else {
+            console.error('Failed to create chat')
+          }
+        } catch (error) {
+          console.error('Error creating chat:', error)
+        }
       }
-      addChat(newChat)
-      // Remove from received requests
-      removeReceivedRequest(request.id)
-      // Navigate using the new chat's id
-      navigate(`/chat/${newChat.id}`)
     }
   }
 
-  const handleReject = (requestId) => {
-    removeReceivedRequest(requestId)
+  const handleReject = async (requestId) => {
+    if (user && user.profile && user.session_id) {
+      try {
+        const rejectFormData = new URLSearchParams()
+        rejectFormData.append('action', 'reject_request')
+        rejectFormData.append('id', user.profile.id)
+        rejectFormData.append('session_id', user.session_id)
+        rejectFormData.append('request_id', requestId)
+
+        const rejectResponse = await fetch(`http://localhost:8080/api`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: rejectFormData.toString()
+        })
+
+        // Remove from UI regardless of response (even if request not found)
+        removeReceivedRequest(requestId)
+
+        if (rejectResponse.status >= 200 && rejectResponse.status < 300) {
+          // Request rejected successfully
+        } else {
+          console.error('Failed to reject request:', rejectResponse.status)
+        }
+      } catch (error) {
+        console.error('Error rejecting request:', error)
+        // Still remove from UI even if API call fails
+        removeReceivedRequest(requestId)
+      }
+    } else {
+      // Fallback: remove from UI if user not authenticated
+      removeReceivedRequest(requestId)
+    }
   }
 
-  const handleChatClick = (userId) => {
+  const handleChatClick = async (userId) => {
     // Check if chat exists, if not create it
     const existingChat = getChatByUserId(userId)
     if (existingChat) {
       // Use the existing chat's id for navigation
       navigate(`/chat/${existingChat.id}`)
     } else {
-      // Create new chat
+      // Create new chat in database
       const request = requests.find(r => r.userId === userId)
-      if (request) {
-        const newChat = {
-          id: request.userId,
-          userId: request.userId,
-          userName: request.name,
-          userEmail: request.email,
-          lastMessage: 'Chat started',
-          lastMessageTime: 'Just now',
-          unreadCount: 0,
-          relationshipType: request.relationshipType
+      if (request && user && user.profile && user.session_id) {
+        try {
+          const createFormData = new URLSearchParams()
+          createFormData.append('action', 'create_chat')
+          createFormData.append('id', user.profile.id)
+          createFormData.append('session_id', user.session_id)
+          createFormData.append('requestee_id', userId)
+
+          const createResponse = await fetch(`http://localhost:8080/api`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: createFormData.toString()
+          })
+
+          if (createResponse.status >= 200 && createResponse.status < 300) {
+            const createResult = await createResponse.json()
+            const chatId = createResult.chat_id
+
+            // Create local chat object with real chat ID
+            const newChat = {
+              id: chatId,
+              userId: request.userId,
+              userName: request.name,
+              userEmail: request.email,
+              lastMessage: 'Chat started',
+              lastMessageTime: 'Just now',
+              unreadCount: 0,
+              relationshipType: request.relationshipType
+            }
+            addChat(newChat)
+            // Navigate using the real chat's id
+            navigate(`/chat/${chatId}`)
+          } else {
+            console.error('Failed to create chat')
+          }
+        } catch (error) {
+          console.error('Error creating chat:', error)
         }
-        addChat(newChat)
-        // Navigate using the new chat's id
-        navigate(`/chat/${newChat.id}`)
       }
     }
   }

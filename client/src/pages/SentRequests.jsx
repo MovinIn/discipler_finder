@@ -3,6 +3,7 @@ import { FaComments, FaUser } from 'react-icons/fa'
 import { useProfile } from '../context/ProfileContext'
 import { useChat } from '../context/ChatContext'
 import { useRequests } from '../context/RequestsContext'
+import { useAuth } from '../context/AuthContext'
 import './SentRequests.css'
 
 function SentRequests() {
@@ -10,6 +11,7 @@ function SentRequests() {
   const { profile } = useProfile()
   const { addChat, getChatByUserId } = useChat()
   const { sentRequests, loading } = useRequests()
+  const { user, isLoggedIn, loading: authLoading } = useAuth()
 
   const getRelationshipType = () => {
     // Based on user's own preference when they sent the request
@@ -26,31 +28,76 @@ function SentRequests() {
     return 'Mentor' // Default
   }
 
-  const handleChatClick = (userId) => {
+  const handleChatClick = async (userId) => {
     // Check if chat exists, if not create it
     const existingChat = getChatByUserId(userId)
     if (existingChat) {
       // Use the existing chat's id for navigation
       navigate(`/chat/${existingChat.id}`)
     } else {
-      // Create new chat
+      // Create new chat in database
       const request = sentRequests.find(r => r.userId === userId)
-      if (request) {
-        const newChat = {
-          id: request.userId,
-          userId: request.userId,
-          userName: request.name,
-          userEmail: request.email,
-          lastMessage: 'Chat started',
-          lastMessageTime: 'Just now',
-          unreadCount: 0,
-          relationshipType: getRelationshipType()
+      if (request && user && user.profile && user.session_id) {
+        try {
+          console.log('Creating chat for users:', user.profile.id, 'and', userId)
+          const createFormData = new URLSearchParams()
+          createFormData.append('action', 'create_chat')
+          createFormData.append('id', user.profile.id)
+          createFormData.append('session_id', user.session_id)
+          createFormData.append('requestee_id', userId)
+
+          const createResponse = await fetch(`http://localhost:8080/api`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: createFormData.toString()
+          })
+
+          if (createResponse.status >= 200 && createResponse.status < 300) {
+            const createResult = await createResponse.json()
+            const chatId = createResult.chat_id
+
+            // Create local chat object with real chat ID
+            const newChat = {
+              id: chatId,
+              userId: request.userId,
+              userName: request.name,
+              userEmail: request.email,
+              lastMessage: 'Chat started',
+              lastMessageTime: 'Just now',
+              unreadCount: 0,
+              relationshipType: getRelationshipType()
+            }
+            addChat(newChat)
+            // Navigate using the real chat's id
+            navigate(`/chat/${chatId}`)
+          } else {
+            console.error('Failed to create chat')
+          }
+        } catch (error) {
+          console.error('Error creating chat:', error)
         }
-        addChat(newChat)
-        // Navigate using the new chat's id
-        navigate(`/chat/${newChat.id}`)
       }
     }
+  }
+
+  // Show loading while auth is being checked
+  if (authLoading) {
+    return (
+      <div className="sent-requests-page">
+        <div className="sent-requests-container">
+          <h1>Sent Requests</h1>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Redirect to login if not authenticated
+  if (!isLoggedIn || !user) {
+    navigate('/login')
+    return null
   }
 
   if (loading) {
@@ -93,7 +140,7 @@ function SentRequests() {
                   
                   <div className="request-details">
                     <p className="relationship-type">
-                      Requested to be an <span className="type-value">{getRelationshipType()}</span>
+                      You requested to be {getRelationshipType().startsWith('A') ? 'an' : 'a'} <span className="type-value">{getRelationshipType()}</span>
                     </p>
                     {request.message && (
                       <div className="request-message">

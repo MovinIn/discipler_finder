@@ -11,6 +11,7 @@ function Profile() {
   const { churches } = useChurches()
   const { user } = useAuth()
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     church: '',
     dateOfBirth: '',
@@ -46,17 +47,19 @@ function Profile() {
     const currentUserId = user?.profile?.id
     
     if (user && user.profile && currentUserId !== lastUserIdRef.current) {
+      const name = user.profile.name || ''
       const email = user.profile.email || ''
       const church = user.profile.church || ''
       const dateOfBirth = user.profile.dob ? formatDateForDisplay(user.profile.dob) : ''
       const gender = user.profile.gender || ''
-      
-      setFormData({ email, church, dateOfBirth, gender })
+
+      setFormData({ name, email, church, dateOfBirth, gender })
       lastUserIdRef.current = currentUserId
     } else if (!user && profile && lastUserIdRef.current !== null) {
       // User logged out, reset
       lastUserIdRef.current = null
       setFormData({
+        name: profile.name || '',
         email: profile.email || '',
         church: profile.church || '',
         dateOfBirth: profile.dateOfBirth || '',
@@ -65,6 +68,7 @@ function Profile() {
     } else if (!user && !lastUserIdRef.current && profile) {
       // Initial load without user (shouldn't happen, but handle gracefully)
       setFormData({
+        name: profile.name || '',
         email: profile.email || '',
         church: profile.church || '',
         dateOfBirth: profile.dateOfBirth || '',
@@ -72,7 +76,7 @@ function Profile() {
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.profile?.id, user?.profile?.email, user?.profile?.church, user?.profile?.dob, user?.profile?.gender])
+  }, [user?.profile?.id, user?.profile?.name, user?.profile?.email, user?.profile?.church, user?.profile?.dob, user?.profile?.gender])
 
   const formatDateInput = (value) => {
     // Check if input ends with a slash (user is trying to move to next section)
@@ -216,6 +220,7 @@ function Profile() {
       formDataToSend.append('action', 'update_profile')
       formDataToSend.append('id', user.profile.id)
       formDataToSend.append('session_id', user.session_id)
+      formDataToSend.append('name', formData.name)
       formDataToSend.append('email', formData.email)
       formDataToSend.append('dob', formatDateForAPI(formData.dateOfBirth))
       formDataToSend.append('church', formData.church)
@@ -238,6 +243,7 @@ function Profile() {
         if (user) {
           user.profile = {
             ...user.profile,
+            name: formData.name,
             email: formData.email,
             church: formData.church,
             dob: formatDateForAPI(formData.dateOfBirth),
@@ -276,6 +282,22 @@ function Profile() {
           )}
 
           <form onSubmit={handleSubmit} className="profile-form">
+            <div className="form-group">
+              <label htmlFor="name">
+                Full Name <span className="required-star">*</span>
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter your full name"
+                required
+                className="name-input"
+              />
+            </div>
+
             <div className="form-group">
               <label htmlFor="email">
                 Email <span className="required-star">*</span>
@@ -342,6 +364,7 @@ function Profile() {
                 value={formData.gender}
                 onChange={handleChange}
                 required
+                className="church-select"
               >
                 <option value="">-- Select gender --</option>
                 <option value="M">Male</option>

@@ -1,7 +1,6 @@
 package com.disciplefinder.servlets;
 
 import at.favre.lib.crypto.bcrypt.BCrypt;
-import com.google.gson.Gson;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -10,7 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -19,6 +17,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,7 +26,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Set;
 
 import com.zaxxer.hikari.HikariConfig;
@@ -35,22 +33,12 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import org.apache.commons.lang3.tuple.Pair;
 
-@FunctionalInterface
-interface MySQLFunction {
-  void execute(Connection conn) throws SQLException, IOException;
-}
-
-@FunctionalInterface
-interface SQLFunction<T> {
-  T apply() throws SQLException;
-}
+import static com.disciplefinder.servlets.SQLUtils.*;
 
 @WebServlet(name = "ApiServlet", urlPatterns = { "/api", "/api/*" })
 public class ApiServlet extends HttpServlet {
 
-  private static final Gson gson = new Gson();
   private static HikariDataSource ds;
-  private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
   @Override
   public void init(ServletConfig config) throws ServletException {
@@ -94,77 +82,32 @@ public class ApiServlet extends HttpServlet {
     return ds.getConnection();
   }
 
-  private String getRandomAlphanumeric(int length) {
-    StringBuilder sb = new StringBuilder(length);
-    Random rnd = new Random();
-    for (int i = 0; i < length; i++) {
-      sb.append(ALPHANUMERIC.charAt(rnd.nextInt(ALPHANUMERIC.length())));
-    }
-    return sb.toString();
+  private static void setCorsHeaders(HttpServletResponse response) {
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.setHeader("Access-Control-Max-Age", "3600");
   }
 
-  public static void sendJson(HttpServletResponse response, Object obj, int status) throws IOException {
-    response.setContentType("application/json");
-    response.setCharacterEncoding("UTF-8");
-    response.setStatus(status);
-
-    String json = gson.toJson(obj);
-
-    try (PrintWriter out = response.getWriter()) {
-      out.print(json);
-      out.flush();
-    }
-  }
-
-  public static void sendJson(HttpServletResponse response, Object obj) throws IOException {
-    sendJson(response, obj, HttpServletResponse.SC_OK);
-  }
-
-  private void executeSQL(MySQLFunction function, HttpServletResponse response) throws IOException {
-    try (Connection conn = getConnection()) {
-      function.execute(conn);
-    } catch (SQLException e) {
-      sendJson(response,
-          Map.of("status", "error", "message", e.getMessage()),
-          HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  private void executeSQL(SessionPair sessionPair, MySQLFunction function, HttpServletResponse response)
-      throws IOException {
-    try (Connection conn = getConnection()) {
-      if (invalidSessionID(sessionPair, conn, response)) {
-        return;
-      }
-      function.execute(conn);
-    } catch (SQLException e) {
-      sendJson(response,
-          Map.of("status", "error", "message", e.getMessage()),
-          HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  private boolean invalidSessionID(SessionPair sessionPair, Connection conn, HttpServletResponse response)
-      throws SQLException, IOException {
+  public static boolean invalidSessionID(SessionPair sessionPair, Connection conn) throws SQLException {
     PreparedStatement checkStmt = conn.prepareStatement(
         "SELECT COUNT(*) FROM codes WHERE user_id = ? AND code = ? AND expires_at > NOW()");
     checkStmt.setInt(1, sessionPair.id);
     checkStmt.setString(2, sessionPair.sessionID);
     ResultSet rs = checkStmt.executeQuery();
-    if (rs.next() && rs.getInt(1) == 0) {
-      sendJson(response,
+    return rs.next() && rs.getInt(1) == 0;
+  }
+
+  public static boolean invalidSessionID(SessionPair sessionPair, Connection conn, HttpServletResponse response)
+      throws SQLException, IOException {
+    boolean invalid = invalidSessionID(sessionPair, conn);
+    if (invalid) {
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Invalid credentials"),
           HttpServletResponse.SC_UNAUTHORIZED);
       return true;
     }
     return false;
-  }
-
-  private void setCorsHeaders(HttpServletResponse response) {
-    response.setHeader("Access-Control-Allow-Origin", "*");
-    response.setHeader("Access-Control-Allow-Methods", "GET, POST");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    response.setHeader("Access-Control-Max-Age", "3600");
   }
 
   @Override
@@ -174,7 +117,7 @@ public class ApiServlet extends HttpServlet {
     response.setContentType("application/json");
     response.setCharacterEncoding("UTF-8");
 
-    sendJson(response,
+    JsonResponseUtils.sendJson(response,
         Map.of("message", "Discipler Finder API is running",
             "timestamp", System.currentTimeMillis()));
   }
@@ -187,7 +130,7 @@ public class ApiServlet extends HttpServlet {
 
     String action = request.getParameter("action");
     if (action == null) {
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Missing action parameter"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
@@ -204,27 +147,28 @@ public class ApiServlet extends HttpServlet {
       case "send_request" -> sendRequest(request, response);
       case "get_latest_messages" -> getLatestMessages(request, response);
       case "get_older_messages" -> getOlderMessages(request, response);
-      case "send_message" -> sendMessage(request, response);
       case "get_posts" -> getPosts(request, response);
       case "query_posts" -> queryPosts(request, response);
       case "mark_messages_as_read" -> markMessagesAsRead(request, response);
       case "create_chat" -> createChat(request, response);
       case "signout" -> signout(request, response);
       case "send_post" -> sendPost(request, response);
+      case "accept_request" -> acceptRequest(request, response);
+      case "reject_request" -> rejectRequest(request, response);
       default -> {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Unknown action: " + action),
             HttpServletResponse.SC_BAD_REQUEST);
       }
     }
   }
 
-  private void login(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void login(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final String email = request.getParameter("email");
     final String password = request.getParameter("password");
 
     if (email == null || password == null || email.isEmpty() || password.isEmpty()) {
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Email and password are required"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
@@ -232,13 +176,13 @@ public class ApiServlet extends HttpServlet {
 
     executeSQL(conn -> {
       PreparedStatement stmt = conn.prepareStatement(
-          "SELECT id, password, activated, email, dob, church, gender, created_at " +
+          "SELECT id as user_id, password, activated, email, dob, church, gender, created_at, name " +
               "FROM users WHERE email = ?");
       stmt.setString(1, email);
       ResultSet rs = stmt.executeQuery();
 
       if (!rs.next()) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Invalid credentials"),
             HttpServletResponse.SC_UNAUTHORIZED);
         return;
@@ -247,7 +191,7 @@ public class ApiServlet extends HttpServlet {
       byte[] storedHash = rs.getBytes("password");
       BCrypt.Result result = BCrypt.verifyer().verify(password.getBytes(), storedHash);
       if (!result.verified) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Invalid credentials"),
             HttpServletResponse.SC_UNAUTHORIZED);
         return;
@@ -255,40 +199,32 @@ public class ApiServlet extends HttpServlet {
 
       boolean isActivated = rs.getBoolean("activated");
       if (!isActivated) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Account not activated. Please check your email for activation instructions."),
             HttpServletResponse.SC_FORBIDDEN);
         return;
       }
 
-      String sessionID = getRandomAlphanumeric(15);
+      String sessionID = GenerateCodeUtils.generateCode(15);
 
       PreparedStatement insertStmt = conn.prepareStatement(
-          "INSERT INTO codes (user_id, code, code_type, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL 7 DAY)");
-      insertStmt.setInt(1, rs.getInt("id"));
+          "INSERT INTO codes (user_id, code, type, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL 7 DAY)");
+      insertStmt.setInt(1, rs.getInt("user_id"));
       insertStmt.setString(2, sessionID);
       insertStmt.setString(3, "session");
       insertStmt.executeUpdate();
 
-      Profile.Builder profileBuilder = new Profile.Builder()
-          .id(rs.getInt("id"))
-          .email(rs.getString("email"))
-          .dob(rs.getDate("dob"))
-          .church(rs.getString("church"))
-          .gender(rs.getString("gender"))
-          .created_at(rs.getTimestamp("created_at"));
-
-      Profile profile = profileBuilder.build();
+      Profile profile = buildProfileFromResultSet(rs);
 
       Map<String, Object> loginResponse = new java.util.HashMap<>();
       loginResponse.put("profile", profile);
       loginResponse.put("session_id", sessionID);
 
-      sendJson(response, loginResponse);
+      JsonResponseUtils.sendJson(response, loginResponse);
     }, response);
   }
 
-  private void createAccount(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void createAccount(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final String email = request.getParameter("email");
     final String password = request.getParameter("password");
     final String dobStr = request.getParameter("dob");
@@ -300,14 +236,14 @@ public class ApiServlet extends HttpServlet {
         email.isEmpty() || password.isEmpty() || dobStr.isEmpty() || church.isEmpty() || gender.isEmpty()
         || name.isEmpty() ||
         !dobStr.matches("\\d{4}-\\d{2}-\\d{2}") || !gender.matches("M|F")) {
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "All required fields must be provided"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
     }
 
     if (password.length() < 4) {
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Password must be at least 4 characters"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
@@ -319,7 +255,7 @@ public class ApiServlet extends HttpServlet {
       checkStmt.setString(1, email);
       ResultSet rs = checkStmt.executeQuery();
       if (rs.next() && rs.getInt(1) > 0) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Email already exists"),
             HttpServletResponse.SC_CONFLICT);
         return;
@@ -339,14 +275,14 @@ public class ApiServlet extends HttpServlet {
       insertStmt.setString(6, gender);
       insertStmt.executeUpdate();
 
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Account created successfully. "
               + "Please check your email for activation instructions."),
           HttpServletResponse.SC_OK);
     }, response);
   }
 
-  private void getChurches(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getChurches(HttpServletRequest request, HttpServletResponse response) throws IOException {
     executeSQL(conn -> {
       PreparedStatement stmt = conn.prepareStatement(
           "SELECT * FROM churches");
@@ -357,11 +293,11 @@ public class ApiServlet extends HttpServlet {
             "address", rs.getString("address"), "splash_text", rs.getString("splash_text"),
             "img_code", rs.getString("img_code")));
       }
-      sendJson(response, churches);
+      JsonResponseUtils.sendJson(response, churches);
     }, response);
   }
 
-  private void updateProfile(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void updateProfile(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -370,9 +306,11 @@ public class ApiServlet extends HttpServlet {
     final String dobStr = request.getParameter("dob");
     final String church = request.getParameter("church");
     final String gender = request.getParameter("gender");
+    final String name = request.getParameter("name");
 
-    if (email == null || dobStr == null || church == null || gender == null) {
-      sendJson(response,
+    if (email == null || dobStr == null || church == null || gender == null || name == null ||
+        email.isEmpty() || dobStr.isEmpty() || church.isEmpty() || gender.isEmpty() || name.isEmpty()) {
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "All required fields must be provided"),
           HttpServletResponse.SC_BAD_REQUEST);
       return;
@@ -382,27 +320,28 @@ public class ApiServlet extends HttpServlet {
       Date dob = Date.valueOf(dobStr);
 
       PreparedStatement updateStmt = conn.prepareStatement(
-          "UPDATE users SET email = ?, dob = ?, church = ?, gender = ? WHERE id = ?");
+          "UPDATE users SET email = ?, dob = ?, church = ?, gender = ?, name = ? WHERE id = ?");
       updateStmt.setString(1, email);
       updateStmt.setDate(2, dob);
       updateStmt.setString(3, church);
       updateStmt.setString(4, gender);
-      updateStmt.setInt(5, id);
+      updateStmt.setString(5, name);
+      updateStmt.setInt(6, id);
 
       int rowsUpdated = updateStmt.executeUpdate();
       if (rowsUpdated == 0) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Profile not found or update failed"),
             HttpServletResponse.SC_NOT_FOUND);
         return;
       }
 
-      sendJson(response,
+      JsonResponseUtils.sendJson(response,
           Map.of("message", "Profile updated successfully"));
     }, response);
   }
 
-  private void getMatches(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getMatches(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -431,48 +370,11 @@ public class ApiServlet extends HttpServlet {
 
         matches.add(Map.of("profile", profile, "type", type));
       }
-      sendJson(response, matches);
+      JsonResponseUtils.sendJson(response, matches);
     }, response);
   }
 
-  private <T> T columnOrDefault(SQLFunction<T> function, T defaultValue) {
-    try {
-      return function.apply();
-    } catch (SQLException e) {
-      return defaultValue;
-    }
-  }
-
-  private Profile buildProfileFromResultSet(ResultSet rs) throws SQLException {
-    Profile.Builder profileBuilder = new Profile.Builder()
-        .email(rs.getString("email"))
-        .id(columnOrDefault(() -> rs.getInt("user_id"), rs.getInt("id")))
-        .dob(columnOrDefault(() -> rs.getDate("dob"), null))
-        .church(columnOrDefault(() -> rs.getString("church"), null))
-        .gender(columnOrDefault(() -> rs.getString("gender"), null))
-        .created_at(columnOrDefault(() -> rs.getTimestamp("created_at"), null));
-
-    return profileBuilder.build();
-  }
-
-  private List<Map<String, Object>> handleRequestResults(ResultSet rs) throws SQLException {
-    List<Map<String, Object>> requests = new ArrayList<>();
-    while (rs.next()) {
-      Profile profile = buildProfileFromResultSet(rs);
-
-      requests.add(Map.of("profile", profile,
-          "request_id", rs.getInt("request_id"),
-          "message", rs.getString("message"),
-          "type", rs.getString("type"),
-          "requested_at", rs.getTimestamp("requested_at"),
-          "requirements", columnOrDefault(() -> rs.getString("requirements"), null),
-          "goals", columnOrDefault(() -> rs.getString("goals"), null),
-          "experience", columnOrDefault(() -> rs.getString("experience"), null)));
-    }
-    return requests;
-  }
-
-  private void getSentRequests(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getSentRequests(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -480,18 +382,18 @@ public class ApiServlet extends HttpServlet {
     executeSQL(session, conn -> {
       PreparedStatement stmt = conn.prepareStatement(
           "SELECT r.id as request_id, r.requested_at, r.message, r.requester_id, r.requestee_id, r.type, " +
-              "u.name, u.id as user_id, u.email, u.gender, u.church, m.requirements, m.goals, m.experience " +
+              "u.name, u.id as user_id, u.email, u.gender, u.church, u.dob, m.requirements, m.goals, m.experience " +
               "FROM requests r " +
               "JOIN users u ON r.requestee_id = u.id " +
               "LEFT JOIN posts m ON r.requestee_id = m.user_id AND m.type = r.type " +
               "WHERE r.requester_id = ?");
       stmt.setInt(1, id);
       ResultSet rs = stmt.executeQuery();
-      sendJson(response, handleRequestResults(rs));
+      JsonResponseUtils.sendJson(response, handleRequestResults(rs));
     }, response);
   }
 
-  private void getReceivedRequests(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getReceivedRequests(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -499,17 +401,18 @@ public class ApiServlet extends HttpServlet {
     executeSQL(session, conn -> {
       PreparedStatement stmt = conn.prepareStatement(
           "SELECT r.id as request_id, r.requested_at, r.message, r.requester_id, r.requestee_id, r.type, " +
-              "u.name, u.id as user_id, u.email, u.gender, u.church" +
+              "u.name, u.id as user_id, u.email, u.gender, u.church, u.dob " +
               "FROM requests r " +
               "JOIN users u ON r.requester_id = u.id " +
               "WHERE r.requestee_id = ?");
       stmt.setInt(1, id);
       ResultSet rs = stmt.executeQuery();
-      sendJson(response, handleRequestResults(rs));
+      System.out.println("hello? are you even there?");
+      JsonResponseUtils.sendJson(response, handleRequestResults(rs));
     }, response);
   }
 
-  private void getPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -524,20 +427,24 @@ public class ApiServlet extends HttpServlet {
             "requirements", rs.getString("requirements"), "goals", rs.getString("goals"),
             "experience", rs.getString("experience")));
       }
-      sendJson(response, posts);
+      JsonResponseUtils.sendJson(response, posts);
     }, response);
   }
 
-  private Pair<Date, Date> dobRange(int minAge, int maxAge) {
+  public static Pair<Date, Date> dobRange(int minAge, int maxAge) {
     LocalDate today = LocalDate.now();
 
-    LocalDate youngestDob = today.minusYears(minAge);
-    LocalDate oldestDob = today.minusYears(maxAge);
+    LocalDate earliestDob = today.minusYears(maxAge);
+    LocalDate latestDob = today.minusYears(minAge);
 
-    return Pair.of(Date.valueOf(youngestDob), Date.valueOf(oldestDob));
+    return Pair.of(Date.valueOf(earliestDob), Date.valueOf(latestDob));
   }
 
-  private void queryPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static int ageFromDob(Date dob) {
+    return Period.between(dob.toLocalDate(), LocalDate.now()).getYears();
+  }
+
+  public static void queryPosts(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final String gender = request.getParameter("gender");
@@ -551,12 +458,13 @@ public class ApiServlet extends HttpServlet {
 
     SessionPair session = new SessionPair(id, sessionID);
     executeSQL(session, conn -> {
-      StringBuilder sql = new StringBuilder("""
-          SELECT p.id, p.user_id, p.type, p.requirements, p.goals, p.experience, u.name, u.email, u.gender, u.church
-          FROM posts p
-          JOIN users u ON p.user_id = u.id
-          WHERE u.id != ? AND u.dob BETWEEN ? AND ? AND u.church = ?
-          """);
+      StringBuilder sql = new StringBuilder(
+          """
+              SELECT p.id, p.user_id, p.type, p.requirements, p.goals, p.experience, u.name, u.email, u.gender, u.church, u.dob
+              FROM posts p
+              JOIN users u ON p.user_id = u.id
+              WHERE u.id != ? AND u.dob BETWEEN ? AND ? AND u.church = ?
+              """);
 
       List<Object> params = new ArrayList<>();
       params.add(id);
@@ -583,17 +491,19 @@ public class ApiServlet extends HttpServlet {
       ResultSet rs = stmt.executeQuery();
       List<Map<String, Object>> posts = new ArrayList<>();
       while (rs.next()) {
-        posts.add(Map.of("id", rs.getInt("id"), "user_id", rs.getInt("user_id"),
+        posts.add(nullSafeMap(
+            "id", rs.getInt("id"), "user_id", rs.getInt("user_id"),
             "type", rs.getString("type"), "requirements", rs.getString("requirements"),
             "goals", rs.getString("goals"), "experience", rs.getString("experience"),
             "name", rs.getString("name"), "email", rs.getString("email"),
-            "gender", rs.getString("gender"), "church", rs.getString("church")));
+            "gender", rs.getString("gender"), "church", rs.getString("church"),
+            "age", ageFromDob(rs.getDate("dob"))));
       }
-      sendJson(response, posts);
+      JsonResponseUtils.sendJson(response, posts);
     }, response);
   }
 
-  private void sendRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void sendRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final int requesteeId = Integer.parseInt(request.getParameter("requestee_id"));
@@ -601,7 +511,11 @@ public class ApiServlet extends HttpServlet {
     final String type = request.getParameter("type");
 
     SessionPair session = new SessionPair(id, sessionID);
-    executeSQL(session, conn -> {
+    try (Connection conn = ApiServlet.getConnection()) {
+      if (ApiServlet.invalidSessionID(session, conn, response)) {
+        return;
+      }
+
       PreparedStatement stmt = conn.prepareStatement(
           "INSERT INTO requests (requester_id, requestee_id, message, type) VALUES (?, ?, ?, ?)",
           Statement.RETURN_GENERATED_KEYS);
@@ -609,21 +523,29 @@ public class ApiServlet extends HttpServlet {
       stmt.setInt(2, requesteeId);
       stmt.setString(3, message);
       stmt.setString(4, type.toUpperCase());
+      stmt.executeUpdate();
 
-      int rowsInserted = stmt.executeUpdate();
-      if (rowsInserted == 0) {
-        sendJson(response,
-            Map.of("message", "You have already sent a request to this user."),
-            HttpServletResponse.SC_CONFLICT);
+      ResultSet rs = stmt.getGeneratedKeys();
+      if (!rs.next()) {
+        JsonResponseUtils.sendJson(response,
+            Map.of("message", "Failed to send request"),
+            HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         return;
       }
+      JsonResponseUtils.sendJson(response, Map.of("message", "Request sent successfully", "request_id", rs.getInt(1)));
 
-      long requestId = stmt.getGeneratedKeys().getLong(1);
-      sendJson(response, Map.of("message", "Request sent successfully", "request_id", requestId));
-    }, response);
+    } catch (SQLException e) {
+      if (e.getErrorCode() == 1062) {
+        JsonResponseUtils.sendJson(response,
+            Map.of("message", "You have already sent a request to this user."),
+            HttpServletResponse.SC_CONFLICT);
+      } else {
+        printDebugErrorMessage(response, e);
+      }
+    }
   }
 
-  private void getLatestMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getLatestMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -689,7 +611,7 @@ public class ApiServlet extends HttpServlet {
             msg.put("id", msgId);
             msg.put("sender_id", rs.getInt("sender_id"));
             msg.put("content", rs.getString("message"));
-            msg.put("created_at", rs.getTimestamp("sent_at"));
+            msg.put("created_at", rs.getTimestamp("sent_at").getTime());
 
             messages.add(msg);
           }
@@ -697,7 +619,7 @@ public class ApiServlet extends HttpServlet {
       }
 
       if (chatIds.isEmpty()) {
-        sendJson(response, new ArrayList<>());
+        JsonResponseUtils.sendJson(response, new ArrayList<>());
         return;
       }
 
@@ -730,11 +652,11 @@ public class ApiServlet extends HttpServlet {
         }
       }
 
-      sendJson(response, new ArrayList<>(chatMap.values()));
+      JsonResponseUtils.sendJson(response, new ArrayList<>(chatMap.values()));
     }, response);
   }
 
-  private void getOlderMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void getOlderMessages(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final int chatId = Integer.parseInt(request.getParameter("chat_id"));
@@ -755,64 +677,13 @@ public class ApiServlet extends HttpServlet {
       List<Map<String, Object>> messages = new ArrayList<>();
       while (rs.next()) {
         messages.add(Map.of("id", rs.getInt("message_id"), "sender_id", rs.getInt("sender_id"), "message",
-            rs.getString("message"), "sent_at", rs.getTimestamp("sent_at")));
+            rs.getString("message"), "sent_at", rs.getTimestamp("sent_at").getTime()));
       }
-      sendJson(response, messages);
+      JsonResponseUtils.sendJson(response, messages);
     }, response);
   }
 
-  private void sendMessage(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    final int id = Integer.parseInt(request.getParameter("id"));
-    final String sessionID = request.getParameter("session_id");
-    final int chatId = Integer.parseInt(request.getParameter("chat_id"));
-    final String message = request.getParameter("message");
-
-    if (message == null || message.isEmpty()) {
-      sendJson(response,
-          Map.of("message", "Message cannot be empty"),
-          HttpServletResponse.SC_BAD_REQUEST);
-      return;
-    }
-
-    if (message.length() > 2048) {
-      sendJson(response,
-          Map.of("message", "Message must be at most 2048 characters"),
-          HttpServletResponse.SC_BAD_REQUEST);
-      return;
-    }
-
-    SessionPair session = new SessionPair(id, sessionID);
-    executeSQL(session, conn -> {
-      PreparedStatement checkStmt = conn.prepareStatement(
-          "SELECT COUNT(*) FROM chat_participants WHERE chat_id = ? AND user_id = ?");
-      checkStmt.setInt(1, chatId);
-      checkStmt.setInt(2, id);
-      ResultSet checkRs = checkStmt.executeQuery();
-      if (checkRs.next() && checkRs.getInt(1) == 0) {
-        sendJson(response,
-            Map.of("message", "User is not a participant in this chat"),
-            HttpServletResponse.SC_FORBIDDEN);
-        return;
-      }
-
-      PreparedStatement insertStmt = conn.prepareStatement(
-          "INSERT INTO messages (chat_id, sender_id, message, sent_at) VALUES (?, ?, ?, NOW())",
-          Statement.RETURN_GENERATED_KEYS);
-      insertStmt.setInt(1, chatId);
-      insertStmt.setInt(2, id);
-      insertStmt.setString(3, message);
-      insertStmt.executeUpdate();
-
-      try (ResultSet keys = insertStmt.getGeneratedKeys()) {
-        int messageId = keys.next() ? keys.getInt(1) : 0;
-        sendJson(response, Map.of(
-            "message", "Message sent successfully",
-            "message_id", messageId));
-      }
-    }, response);
-  }
-
-  private void markMessagesAsRead(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void markMessagesAsRead(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final int chatId = Integer.parseInt(request.getParameter("chat_id"));
@@ -826,10 +697,10 @@ public class ApiServlet extends HttpServlet {
       stmt.setInt(3, id);
       stmt.executeUpdate();
     }, response);
-    sendJson(response, Map.of("message", "Messages marked as read"));
+    JsonResponseUtils.sendJson(response, Map.of("message", "Messages marked as read"));
   }
 
-  private void createChat(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void createChat(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final int requesteeId = Integer.parseInt(request.getParameter("requestee_id"));
@@ -840,7 +711,7 @@ public class ApiServlet extends HttpServlet {
 
       ResultSet rs = stmt.getGeneratedKeys();
       if (!rs.next()) {
-        sendJson(response,
+        JsonResponseUtils.sendJson(response,
             Map.of("message", "Failed to create chat"),
             HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         return;
@@ -859,11 +730,11 @@ public class ApiServlet extends HttpServlet {
       insertStmt.setInt(2, requesteeId);
       insertStmt.executeUpdate();
 
-      sendJson(response, Map.of("message", "Chat created successfully", "chat_id", chatId));
+      JsonResponseUtils.sendJson(response, Map.of("message", "Chat created successfully", "chat_id", chatId));
     }, response);
   }
 
-  private void signout(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void signout(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     SessionPair session = new SessionPair(id, sessionID);
@@ -872,11 +743,11 @@ public class ApiServlet extends HttpServlet {
       stmt.setInt(1, id);
       stmt.setString(2, sessionID);
       stmt.executeUpdate();
-      sendJson(response, Map.of("message", "Signed out successfully"));
+      JsonResponseUtils.sendJson(response, Map.of("message", "Signed out successfully"));
     }, response);
   }
 
-  private void sendPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+  public static void sendPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final int id = Integer.parseInt(request.getParameter("id"));
     final String sessionID = request.getParameter("session_id");
     final String type = request.getParameter("type");
@@ -893,7 +764,70 @@ public class ApiServlet extends HttpServlet {
       stmt.setString(4, goals);
       stmt.setString(5, experience);
       stmt.executeUpdate();
-      sendJson(response, Map.of("message", "Post sent successfully"));
+      JsonResponseUtils.sendJson(response, Map.of("message", "Post sent successfully"));
+    }, response);
+  }
+
+  public static void acceptRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int requestId = Integer.parseInt(request.getParameter("request_id"));
+    final int requesteeId = Integer.parseInt(request.getParameter("requestee_id"));
+    final String type = request.getParameter("type");
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement insertStmt = conn
+          .prepareStatement("INSERT INTO matches (user_one_id, user_two_id, discipleship) VALUES (?, ?, ?)");
+      PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM posts WHERE user_id = ? AND type = ?");
+      PreparedStatement deleteStmt2 = conn.prepareStatement("DELETE FROM requests WHERE id = ?");
+
+      deleteStmt2.setInt(1, requestId);
+      deleteStmt.setInt(1, id);
+
+      if (type.equals("A")) {
+        insertStmt.setInt(1, requesteeId);
+        insertStmt.setInt(2, id);
+        insertStmt.setBoolean(3, false);
+        deleteStmt.setString(2, "A");
+      } else if (type.equals("M")) {
+        insertStmt.setInt(1, requesteeId);
+        insertStmt.setInt(2, id);
+        insertStmt.setBoolean(3, true);
+        deleteStmt.setString(2, "D");
+      } else if (type.equals("D")) {
+        insertStmt.setInt(1, id);
+        insertStmt.setInt(2, requesteeId);
+        insertStmt.setBoolean(3, true);
+        deleteStmt.setString(2, "M");
+      } else {
+        JsonResponseUtils.sendJson(response, Map.of("message", "Invalid request type"),
+            HttpServletResponse.SC_BAD_REQUEST);
+        return;
+      }
+
+      if (insertStmt.executeUpdate() == 0) {
+        JsonResponseUtils.sendJson(response, Map.of("message", "Failed to accept request"),
+            HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        return;
+      }
+
+      deleteStmt.executeUpdate();
+      deleteStmt2.executeUpdate();
+
+      JsonResponseUtils.sendJson(response, Map.of("message", "Request accepted successfully"));
+    }, response);
+  }
+
+  public static void rejectRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    final int requestId = Integer.parseInt(request.getParameter("request_id"));
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM requests WHERE id = ?");
+      deleteStmt.setInt(1, requestId);
+      deleteStmt.executeUpdate();
+      JsonResponseUtils.sendJson(response, Map.of("message", "Request rejected successfully"));
     }, response);
   }
 }

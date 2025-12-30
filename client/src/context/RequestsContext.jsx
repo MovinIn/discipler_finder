@@ -48,10 +48,12 @@ export function RequestsProvider({ children }) {
 
           setSentRequests(transformedRequests)
         } else {
-          console.error('Failed to fetch sent requests')
+          console.error('Failed to fetch sent requests:', response.status)
         }
       } catch (error) {
         console.error('Error fetching sent requests:', error)
+      } finally {
+        setLoading(false)
       }
     }
 

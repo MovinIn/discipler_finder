@@ -15,6 +15,7 @@ import Matchmaking from './pages/Matchmaking'
 import Profile from './pages/Profile'
 import ThankYou from './pages/ThankYou'
 import SentRequests from './pages/SentRequests'
+import ReceivedRequests from './pages/ReceivedRequests'
 import Posts from './pages/Posts'
 import Chat from './pages/Chat'
 import './App.css'
@@ -40,6 +41,7 @@ function App() {
                     <Route path="/profile" element={<Profile />} />
                   <Route path="/thank-you" element={<ThankYou />} />
                   <Route path="/sent-requests" element={<SentRequests />} />
+                  <Route path="/received-requests" element={<ReceivedRequests />} />
                   <Route path="/posts" element={<Posts />} />
                   <Route path="/chat/:chatId?" element={<Chat />} />
                   </Routes>

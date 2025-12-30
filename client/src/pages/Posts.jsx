@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FaComments, FaUser, FaCheck, FaTimes } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +16,7 @@ function Posts() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedPostType, setSelectedPostType] = useState(null)
+  const lastFetchedUserIdRef = useRef(null)
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -23,6 +24,14 @@ function Posts() {
         setLoading(false)
         return
       }
+
+      // Prevent duplicate calls for the same user
+      if (lastFetchedUserIdRef.current === user.profile.id) {
+        setLoading(false)
+        return
+      }
+
+      lastFetchedUserIdRef.current = user.profile.id
 
       try {
         const formData = new URLSearchParams()
@@ -56,7 +65,7 @@ function Posts() {
     }
 
     fetchPosts()
-  }, [user])
+  }, [user?.profile?.id])
 
   // Filter received requests by selected post type
   const filteredRequests = selectedPostType
@@ -73,26 +82,89 @@ function Posts() {
     }
   }
 
-  const handleAccept = (request) => {
-    const existingChat = getChatByUserId(request.userId)
-    
-    if (existingChat) {
-      removeReceivedRequest(request.id)
-      navigate(`/chat/${existingChat.id}`)
-    } else {
-      const newChat = {
-        id: request.userId,
-        userId: request.userId,
-        userName: request.name,
-        userEmail: request.email,
-        lastMessage: 'Chat started',
-        lastMessageTime: 'Just now',
-        unreadCount: 0,
-        relationshipType: getRelationshipType(request.type)
+  const handleAccept = async (request) => {
+    if (!user || !user.profile || !user.session_id) {
+      alert('You must be logged in to accept requests')
+      return
+    }
+
+    try {
+      // Call accept_request endpoint
+      const acceptFormData = new URLSearchParams()
+      acceptFormData.append('action', 'accept_request')
+      acceptFormData.append('id', user.profile.id)
+      acceptFormData.append('session_id', user.session_id)
+      acceptFormData.append('request_id', request.id)
+      acceptFormData.append('requestee_id', request.userId)
+      acceptFormData.append('type', request.type)
+
+      const acceptResponse = await fetch(`${API_BASE_URL}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: acceptFormData.toString()
+      })
+
+      if (acceptResponse.status >= 200 && acceptResponse.status < 300) {
+        // Request accepted successfully, now create/handle chat
+        const existingChat = getChatByUserId(request.userId)
+
+        if (existingChat) {
+          // Navigate to existing chat
+          navigate(`/chat/${existingChat.id}`)
+        } else {
+          // Create chat locally and navigate
+          try {
+            const createFormData = new URLSearchParams()
+            createFormData.append('action', 'create_chat')
+            createFormData.append('id', user.profile.id)
+            createFormData.append('session_id', user.session_id)
+            createFormData.append('requestee_id', request.userId)
+
+            const createResponse = await fetch(`${API_BASE_URL}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: createFormData.toString()
+            })
+
+            if (createResponse.status >= 200 && createResponse.status < 300) {
+              const createResult = await createResponse.json()
+              const chatId = createResult.chat_id
+
+              // Add chat locally with real chat ID
+              const newChat = {
+                id: chatId,
+                userId: request.userId,
+                userName: request.name,
+                userEmail: request.email,
+                lastMessage: 'Chat started',
+                lastMessageTime: 'Just now',
+                unreadCount: 0,
+                relationshipType: getRelationshipType(request.type)
+              }
+              addChat(newChat)
+              // Navigate using the real chat's id
+              navigate(`/chat/${chatId}`)
+            } else {
+              console.error('Failed to create chat after accepting request')
+            }
+          } catch (error) {
+            console.error('Error creating chat after accepting request:', error)
+          }
+        }
+
+        // Remove from received requests (locally)
+        removeReceivedRequest(request.id)
+      } else {
+        const errorResult = await acceptResponse.json()
+        alert(errorResult.message || 'Failed to accept request')
       }
-      addChat(newChat)
-      removeReceivedRequest(request.id)
-      navigate(`/chat/${newChat.id}`)
+    } catch (error) {
+      console.error('Error accepting request:', error)
+      alert('Failed to accept request. Please try again.')
     }
   }
 
@@ -100,25 +172,53 @@ function Posts() {
     removeReceivedRequest(requestId)
   }
 
-  const handleChatClick = (userId) => {
+  const handleChatClick = async (userId) => {
     const existingChat = getChatByUserId(userId)
     if (existingChat) {
       navigate(`/chat/${existingChat.id}`)
     } else {
+      // Create new chat in database
       const request = receivedRequests.find(r => r.userId === userId)
-      if (request) {
-        const newChat = {
-          id: request.userId,
-          userId: request.userId,
-          userName: request.name,
-          userEmail: request.email,
-          lastMessage: 'Chat started',
-          lastMessageTime: 'Just now',
-          unreadCount: 0,
-          relationshipType: getRelationshipType(request.type)
+      if (request && user && user.profile && user.session_id) {
+        try {
+          const createFormData = new URLSearchParams()
+          createFormData.append('action', 'create_chat')
+          createFormData.append('id', user.profile.id)
+          createFormData.append('session_id', user.session_id)
+          createFormData.append('requestee_id', userId)
+
+          const createResponse = await fetch(`${API_BASE_URL}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: createFormData.toString()
+          })
+
+          if (createResponse.status >= 200 && createResponse.status < 300) {
+            const createResult = await createResponse.json()
+            const chatId = createResult.chat_id
+
+            // Create local chat object with real chat ID
+            const newChat = {
+              id: chatId,
+              userId: request.userId,
+              userName: request.name,
+              userEmail: request.email,
+              lastMessage: 'Chat started',
+              lastMessageTime: 'Just now',
+              unreadCount: 0,
+              relationshipType: getRelationshipType(request.type)
+            }
+            addChat(newChat)
+            // Navigate using the real chat's id
+            navigate(`/chat/${chatId}`)
+          } else {
+            console.error('Failed to create chat')
+          }
+        } catch (error) {
+          console.error('Error creating chat:', error)
         }
-        addChat(newChat)
-        navigate(`/chat/${newChat.id}`)
       }
     }
   }
