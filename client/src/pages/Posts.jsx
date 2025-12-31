@@ -6,7 +6,7 @@ import { useChat } from '../context/ChatContext'
 import { useRequests } from '../context/RequestsContext'
 import './Posts.css'
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 function Posts() {
   const navigate = useNavigate()

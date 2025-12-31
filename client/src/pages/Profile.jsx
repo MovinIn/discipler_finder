@@ -4,7 +4,7 @@ import { useChurches } from '../context/ChurchesContext'
 import { useAuth } from '../context/AuthContext'
 import './Profile.css'
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 function Profile() {
   const { profile, updateProfile } = useProfile()

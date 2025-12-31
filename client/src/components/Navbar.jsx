@@ -13,6 +13,7 @@ function Navbar() {
   const { isLoggedIn, logout, user } = useAuth()
   const { clearProfile } = useProfile()
   const dropdownRef = useRef(null)
+  const isSigningOutRef = useRef(false)
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
@@ -37,40 +38,19 @@ function Navbar() {
   }
 
   const handleSignOut = async () => {
-    // Get user data from localStorage
-    const storedUser = localStorage.getItem('user')
-    const storedSessionId = localStorage.getItem('session_id')
-    
-    // Call signout API directly
-    if (storedUser && storedSessionId) {
-      try {
-        const parsedUser = JSON.parse(storedUser)
-        const userId = parsedUser?.profile?.id || parsedUser?.id
-        
-        if (userId) {
-          const formData = new URLSearchParams()
-          formData.append('action', 'signout')
-          formData.append('id', userId.toString())
-          formData.append('session_id', storedSessionId)
-          
-          await fetch('http://localhost:8080/api', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData.toString()
-          })
-        }
-      } catch (error) {
-        console.error('Signout API error:', error)
-      }
+    // Prevent duplicate clicks
+    if (isSigningOutRef.current) return
+    isSigningOutRef.current = true
+
+    try {
+      // Call the logout function which handles both API call and local state clearing
+      await logout()
+      clearProfile()
+      navigate('/')
+      closeMenu()
+    } finally {
+      isSigningOutRef.current = false
     }
-    
-    // Call the logout function to clear local state
-    await logout()
-    clearProfile()
-    navigate('/')
-    closeMenu()
   }
 
   const toggleHomeDropdown = () => {

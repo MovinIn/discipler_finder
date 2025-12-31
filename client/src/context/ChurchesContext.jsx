@@ -1,42 +1,33 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { fetchChurchesOnce, getCachedChurches, hasChurchesBeenFetched } from '../services/apiService'
 
 const ChurchesContext = createContext()
 
-const API_BASE_URL = '/api'
-
 export function ChurchesProvider({ children }) {
-  const [churches, setChurches] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Initialize with cached data if available
+  const [churches, setChurches] = useState(getCachedChurches)
+  const [loading, setLoading] = useState(!hasChurchesBeenFetched())
 
   useEffect(() => {
-    // Fetch churches on app startup
-    const fetchChurches = async () => {
-      try {
-        const formData = new URLSearchParams()
-        formData.append('action', 'get_churches')
-
-        const response = await fetch(`${API_BASE_URL}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: formData.toString()
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setChurches(data)
-        } else {
-          console.error('Failed to fetch churches')
-        }
-      } catch (error) {
-        console.error('Error fetching churches:', error)
-      } finally {
-        setLoading(false)
-      }
+    // If already fetched, just use cached data
+    if (hasChurchesBeenFetched()) {
+      setChurches(getCachedChurches())
+      setLoading(false)
+      return
     }
 
-    fetchChurches()
+    let cancelled = false
+
+    fetchChurchesOnce().then(data => {
+      if (!cancelled) {
+        setChurches(data)
+        setLoading(false)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (

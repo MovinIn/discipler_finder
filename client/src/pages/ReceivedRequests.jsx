@@ -36,7 +36,7 @@ function ReceivedRequests() {
         acceptFormData.append('requestee_id', request.userId)
         acceptFormData.append('type', request.type || 'A')
 
-        const acceptResponse = await fetch(`http://localhost:8080/api`, {
+        const acceptResponse = await fetch(`/api`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -79,7 +79,7 @@ function ReceivedRequests() {
           createFormData.append('session_id', user.session_id)
           createFormData.append('requestee_id', request.userId)
 
-          const createResponse = await fetch(`http://localhost:8080/api`, {
+          const createResponse = await fetch(`/api`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
@@ -126,7 +126,7 @@ function ReceivedRequests() {
         rejectFormData.append('session_id', user.session_id)
         rejectFormData.append('request_id', requestId)
 
-        const rejectResponse = await fetch(`http://localhost:8080/api`, {
+        const rejectResponse = await fetch(`/api`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -170,7 +170,7 @@ function ReceivedRequests() {
           createFormData.append('session_id', user.session_id)
           createFormData.append('requestee_id', userId)
 
-          const createResponse = await fetch(`http://localhost:8080/api`, {
+          const createResponse = await fetch(`/api`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',

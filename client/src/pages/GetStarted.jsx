@@ -4,7 +4,7 @@ import { useProfile } from '../context/ProfileContext'
 import { useAuth } from '../context/AuthContext'
 import './GetStarted.css'
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 function GetStarted() {
   const navigate = useNavigate()
@@ -60,7 +60,7 @@ function GetStarted() {
       formDataToSend.append('goals', formData.future)
       formDataToSend.append('experience', formData.disciplingExperience || '')
 
-      const response = await fetch(`${API_BASE_URL}`, {
+      const response = await fetch(`/api`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

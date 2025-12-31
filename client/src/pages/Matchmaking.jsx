@@ -5,7 +5,7 @@ import { useRequests } from '../context/RequestsContext'
 import { useAuth } from '../context/AuthContext'
 import './Matchmaking.css'
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 function Matchmaking() {
   const { profile, updateProfile } = useProfile()

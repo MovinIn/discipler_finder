@@ -46,7 +46,7 @@ function SentRequests() {
           createFormData.append('session_id', user.session_id)
           createFormData.append('requestee_id', userId)
 
-          const createResponse = await fetch(`http://localhost:8080/api`, {
+          const createResponse = await fetch(`/api`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
