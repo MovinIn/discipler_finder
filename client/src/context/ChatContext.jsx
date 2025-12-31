@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext'
 
 const ChatContext = createContext()
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 export function ChatProvider({ children }) {
   const { user } = useAuth()

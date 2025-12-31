@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 
 const ChurchesContext = createContext()
 
-const API_BASE_URL = 'http://localhost:8080/api'
+const API_BASE_URL = '/api'
 
 export function ChurchesProvider({ children }) {
   const [churches, setChurches] = useState([])

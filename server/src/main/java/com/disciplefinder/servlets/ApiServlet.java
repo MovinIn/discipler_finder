@@ -224,6 +224,10 @@ public class ApiServlet extends HttpServlet {
     }, response);
   }
 
+  public static void sendActivationEmail(String email) throws IOException {
+    String activationCode = GenerateCodeUtils.generateCode(15);
+  }
+
   public static void createAccount(HttpServletRequest request, HttpServletResponse response) throws IOException {
     final String email = request.getParameter("email");
     final String password = request.getParameter("password");
@@ -274,6 +278,8 @@ public class ApiServlet extends HttpServlet {
       insertStmt.setString(5, church);
       insertStmt.setString(6, gender);
       insertStmt.executeUpdate();
+
+      sendActivationEmail(email);
 
       JsonResponseUtils.sendJson(response,
           Map.of("message", "Account created successfully. "
