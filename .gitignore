@@ -28,6 +28,8 @@ mvnw.cmd
 server/src/main/resources/local.properties
 server/src/main/resources/vm.properties
 
+dfinder_private.key
+
 # IDE
 .vscode/*
 !.vscode/extensions.json
