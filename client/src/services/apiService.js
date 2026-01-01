@@ -22,8 +22,10 @@ export async function fetchChurchesOnce() {
     return state.churchesPromise
   }
   
-  // Already tried to fetch (even if it failed)
   if (state.churchesFetched) {
+    if (state.churchesPromise) {
+      return state.churchesPromise
+    }
     return state.churchesData || []
   }
   

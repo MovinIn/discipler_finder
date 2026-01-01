@@ -3,16 +3,20 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FaChevronDown } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../context/ProfileContext'
+import { useNotifications } from '../context/NotificationsContext'
 import './Navbar.css'
 
 function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isHomeDropdownOpen, setIsHomeDropdownOpen] = useState(false)
+  const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { isLoggedIn, logout, user } = useAuth()
   const { clearProfile } = useProfile()
+  const { unreadCount, isNotificationsTabActive } = useNotifications()
   const dropdownRef = useRef(null)
+  const featuresDropdownRef = useRef(null)
   const isSigningOutRef = useRef(false)
 
   const toggleMenu = () => {
@@ -22,6 +26,7 @@ function Navbar() {
   const closeMenu = () => {
     setIsMenuOpen(false)
     setIsHomeDropdownOpen(false)
+    setIsFeaturesDropdownOpen(false)
   }
 
   const isActive = (path) => {
@@ -35,6 +40,11 @@ function Navbar() {
   const isHomeSectionActive = () => {
     const homePaths = ['/', '/purpose', '/partnerships', '/download']
     return homePaths.includes(location.pathname)
+  }
+
+  const isFeaturesSectionActive = () => {
+    const featuresPaths = ['/get-started', '/posts', '/relationships', '/sent-requests']
+    return featuresPaths.includes(location.pathname)
   }
 
   const handleSignOut = async () => {
@@ -61,22 +71,33 @@ function Navbar() {
     setIsHomeDropdownOpen(false)
   }
 
-  // Close dropdown when clicking outside
+  const toggleFeaturesDropdown = () => {
+    setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)
+  }
+
+  const closeFeaturesDropdown = () => {
+    setIsFeaturesDropdownOpen(false)
+  }
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsHomeDropdownOpen(false)
       }
+      if (featuresDropdownRef.current && !featuresDropdownRef.current.contains(event.target)) {
+        setIsFeaturesDropdownOpen(false)
+      }
     }
 
-    if (isHomeDropdownOpen) {
+    if (isHomeDropdownOpen || isFeaturesDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isHomeDropdownOpen])
+  }, [isHomeDropdownOpen, isFeaturesDropdownOpen])
 
   return (
     <nav className="navbar">
@@ -97,17 +118,29 @@ function Navbar() {
 
         <ul className={`navbar-menu ${isMenuOpen ? 'active' : ''}`}>
           {isLoggedIn ? (
+            <>
             <li className="navbar-item dropdown-item" ref={dropdownRef}>
               <div
                 className={`navbar-link dropdown-toggle ${isHomeSectionActive() ? 'active' : ''}`}
                 onMouseEnter={() => !isMenuOpen && setIsHomeDropdownOpen(true)}
                 onMouseLeave={() => !isMenuOpen && setIsHomeDropdownOpen(false)}
+                onClick={(e) => {
+                  if (isMenuOpen) {
+                    e.preventDefault()
+                    toggleHomeDropdown()
+                  }
+                }}
               >
                 <Link
                   to="/"
-                  onClick={() => {
-                    closeMenu()
-                    closeHomeDropdown()
+                  onClick={(e) => {
+                    if (isMenuOpen) {
+                      e.preventDefault()
+                      toggleHomeDropdown()
+                    } else {
+                      closeMenu()
+                      closeHomeDropdown()
+                    }
                   }}
                   className="dropdown-home-link"
                 >
@@ -182,6 +215,16 @@ function Navbar() {
                 </li>
               </ul>
             </li>
+            <li className="navbar-item">
+              <Link
+                to="/profile"
+                className={`navbar-link ${isActive('/profile')}`}
+                onClick={closeMenu}
+              >
+                Profile
+              </Link>
+            </li>
+            </>
           ) : (
             <>
               <li className="navbar-item">
@@ -224,6 +267,102 @@ function Navbar() {
           )}
           {isLoggedIn && (
             <>
+              <li className="navbar-item dropdown-item" ref={featuresDropdownRef}>
+                <div
+                  className={`navbar-link dropdown-toggle ${isFeaturesSectionActive() ? 'active' : ''}`}
+                  onMouseEnter={() => !isMenuOpen && setIsFeaturesDropdownOpen(true)}
+                  onMouseLeave={() => !isMenuOpen && setIsFeaturesDropdownOpen(false)}
+                  onClick={(e) => {
+                    if (isMenuOpen) {
+                      e.preventDefault()
+                      toggleFeaturesDropdown()
+                    }
+                  }}
+                >
+                  <Link
+                    to="/get-started"
+                    onClick={(e) => {
+                      if (isMenuOpen) {
+                        e.preventDefault()
+                        toggleFeaturesDropdown()
+                      } else {
+                        closeMenu()
+                        closeFeaturesDropdown()
+                      }
+                    }}
+                    className="dropdown-home-link"
+                  >
+                    Get Started
+                  </Link>
+                  <button
+                    className="dropdown-arrow-btn"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      toggleFeaturesDropdown()
+                    }}
+                    onMouseEnter={(e) => {
+                      e.stopPropagation()
+                      if (!isMenuOpen) setIsFeaturesDropdownOpen(true)
+                    }}
+                  >
+                    <FaChevronDown className="dropdown-icon" />
+                  </button>
+                </div>
+                <ul
+                  className={`dropdown-menu ${isFeaturesDropdownOpen ? 'open' : ''}`}
+                  onMouseEnter={() => !isMenuOpen && setIsFeaturesDropdownOpen(true)}
+                  onMouseLeave={() => !isMenuOpen && setIsFeaturesDropdownOpen(false)}
+                >
+                  <li>
+                    <Link
+                      to="/get-started"
+                      className={`dropdown-link ${isActive('/get-started')}`}
+                      onClick={() => {
+                        closeMenu()
+                        closeFeaturesDropdown()
+                      }}
+                    >
+                      Get Started
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/posts"
+                      className={`dropdown-link ${isActive('/posts')}`}
+                      onClick={() => {
+                        closeMenu()
+                        closeFeaturesDropdown()
+                      }}
+                    >
+                      Posts
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/relationships"
+                      className={`dropdown-link ${isActive('/relationships')}`}
+                      onClick={() => {
+                        closeMenu()
+                        closeFeaturesDropdown()
+                      }}
+                    >
+                      Relationships
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/sent-requests"
+                      className={`dropdown-link ${isActive('/sent-requests')}`}
+                      onClick={() => {
+                        closeMenu()
+                        closeFeaturesDropdown()
+                      }}
+                    >
+                      Sent Requests
+                    </Link>
+                  </li>
+                </ul>
+              </li>
               <li className="navbar-item">
                 <Link
                   to="/matchmaking"
@@ -235,47 +374,23 @@ function Navbar() {
               </li>
               <li className="navbar-item">
                 <Link
-                  to="/get-started"
-                  className={`navbar-link ${isActive('/get-started')}`}
-                  onClick={closeMenu}
-                >
-                  Get Started
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link
-                  to="/profile"
-                  className={`navbar-link ${isActive('/profile')}`}
-                  onClick={closeMenu}
-                >
-                  Profile
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link
-                  to="/sent-requests"
-                  className={`navbar-link ${isActive('/sent-requests')}`}
-                  onClick={closeMenu}
-                >
-                  Sent Requests
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link
-                  to="/posts"
-                  className={`navbar-link ${isActive('/posts')}`}
-                  onClick={closeMenu}
-                >
-                  Posts
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link
                   to="/chat"
                   className={`navbar-link ${isActive('/chat')}`}
                   onClick={closeMenu}
                 >
                   Chat
+                </Link>
+              </li>
+              <li className="navbar-item">
+                <Link
+                  to="/notifications"
+                  className={`navbar-link ${isActive('/notifications')}`}
+                  onClick={closeMenu}
+                >
+                  Notifications
+                  {!isNotificationsTabActive && unreadCount > 0 && (
+                    <span className="notification-badge">{unreadCount}</span>
+                  )}
                 </Link>
               </li>
             </>

@@ -91,6 +91,7 @@ function Matchmaking() {
           gender: post.gender,
           age: post.age,
           preference: post.type === 'M' ? 'disciple' : post.type === 'D' ? 'be-discipled' : 'accountability',
+          postType: post.type,  // Store original post type ('M', 'D', or 'A')
           lookingFor: post.requirements || '',
           future: post.goals || '',
           disciplingExperience: post.experience || 'Not specified'
@@ -181,19 +182,14 @@ function Matchmaking() {
     }
 
     try {
-      // Map preference to backend type
-      const typeMap = {
-        'disciple': 'M', // User wants to disciple, so they're requesting to be a Mentor
-        'be-discipled': 'D', // User wants to be discipled, so they're requesting to be a Disciple
-        'accountability': 'A' // User wants accountability, so they're requesting to be an Accountability Partner
-      }
-      const requestType = typeMap[profile.preference || 'disciple'] || 'M'
+      // Use the post's type for the request type (should match the post type)
+      const requestType = selectedMatch.postType || 'M'
 
       const formData = new URLSearchParams()
       formData.append('action', 'send_request')
       formData.append('id', user.profile.id.toString())
       formData.append('session_id', user.session_id)
-      formData.append('requestee_id', selectedMatch.id.toString())
+      formData.append('requestee_id', selectedMatch.userId.toString())
       formData.append('message', requestMessage.trim() || '')
       formData.append('type', requestType)
 
@@ -222,7 +218,7 @@ function Matchmaking() {
 
         const newRequest = {
           id: result.request_id || Date.now(),
-          userId: selectedMatch.id,
+          userId: selectedMatch.userId,
           name: selectedMatch.name,
           email: selectedMatch.email || '',
           preference: selectedMatch.preference,

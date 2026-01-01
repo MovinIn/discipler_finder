@@ -14,7 +14,8 @@ public class Profile {
   private final String church;
   private final String gender;
   private final String name;
-  private final Timestamp created_at;
+  private final Timestamp createdAt;
+  private final Timestamp lastLoginAt;
 
   private Profile(Builder builder) {
     this.id = builder.id;
@@ -22,8 +23,9 @@ public class Profile {
     this.dob = builder.dob;
     this.church = builder.church;
     this.gender = builder.gender;
-    this.created_at = builder.created_at;
+    this.createdAt = builder.createdAt;
     this.name = builder.name;
+    this.lastLoginAt = builder.lastLoginAt;
   }
 
   // Getters for required fields
@@ -52,8 +54,12 @@ public class Profile {
     return Optional.ofNullable(gender);
   }
 
-  public Optional<Timestamp> getCreated_at() {
-    return Optional.ofNullable(created_at);
+  public Optional<Timestamp> getCreatedAt() {
+    return Optional.ofNullable(createdAt);
+  }
+
+  public Optional<Timestamp> getLastLoginAt() {
+    return Optional.ofNullable(lastLoginAt);
   }
 
   public static class Builder {
@@ -65,7 +71,8 @@ public class Profile {
     private Date dob;
     private String church;
     private String gender;
-    private Timestamp created_at;
+    private Timestamp createdAt;
+    private Timestamp lastLoginAt;
 
     public Builder id(Integer id) {
       this.id = id;
@@ -97,8 +104,13 @@ public class Profile {
       return this;
     }
 
-    public Builder created_at(Timestamp created_at) {
-      this.created_at = created_at;
+    public Builder createdAt(Timestamp createdAt) {
+      this.createdAt = createdAt;
+      return this;
+    }
+
+    public Builder lastLoginAt(Timestamp lastLoginAt) {
+      this.lastLoginAt = lastLoginAt;
       return this;
     }
 

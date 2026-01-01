@@ -5,22 +5,15 @@ const ChurchesContext = createContext()
 
 export function ChurchesProvider({ children }) {
   // Initialize with cached data if available
-  const [churches, setChurches] = useState(getCachedChurches)
-  const [loading, setLoading] = useState(!hasChurchesBeenFetched())
+  const [churches, setChurches] = useState(getCachedChurches())
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // If already fetched, just use cached data
-    if (hasChurchesBeenFetched()) {
-      setChurches(getCachedChurches())
-      setLoading(false)
-      return
-    }
-
     let cancelled = false
 
     fetchChurchesOnce().then(data => {
       if (!cancelled) {
-        setChurches(data)
+        setChurches(data || [])
         setLoading(false)
       }
     })

@@ -43,7 +43,7 @@ function Login() {
       // Login
       const result = await login(formData.email, formData.password)
       if (result.success) {
-        navigate('/')
+        navigate('/profile')
       } else {
         setError(result.error)
         // Show resend activation option if account not activated

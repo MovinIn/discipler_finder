@@ -168,8 +168,39 @@ function Posts() {
     }
   }
 
-  const handleReject = (requestId) => {
-    removeReceivedRequest(requestId)
+  const handleReject = async (requestId) => {
+    if (!user || !user.profile || !user.session_id) {
+      alert('You must be logged in to reject requests')
+      return
+    }
+
+    try {
+      // Call reject_request endpoint
+      const rejectFormData = new URLSearchParams()
+      rejectFormData.append('action', 'reject_request')
+      rejectFormData.append('id', user.profile.id)
+      rejectFormData.append('session_id', user.session_id)
+      rejectFormData.append('request_id', requestId)
+
+      const rejectResponse = await fetch(`${API_BASE_URL}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: rejectFormData.toString()
+      })
+
+      if (rejectResponse.status >= 200 && rejectResponse.status < 300) {
+        // Request rejected successfully, remove from local state
+        removeReceivedRequest(requestId)
+      } else {
+        const errorResult = await rejectResponse.json()
+        alert(errorResult.message || 'Failed to reject request')
+      }
+    } catch (error) {
+      console.error('Error rejecting request:', error)
+      alert('Failed to reject request. Please try again.')
+    }
   }
 
   const handleChatClick = async (userId) => {
@@ -227,7 +258,7 @@ function Posts() {
     return (
       <div className="posts-page">
         <div className="posts-container">
-          <h1>My Posts</h1>
+          <h1>Your Posts</h1>
           <p>Loading posts...</p>
         </div>
       </div>
@@ -237,7 +268,7 @@ function Posts() {
   return (
     <div className="posts-page">
       <div className="posts-container">
-        <h1>My Posts</h1>
+        <h1>Your Posts</h1>
         <p className="page-description">
           View your posts and manage requests from others who want to connect with you.
         </p>
@@ -251,20 +282,28 @@ function Posts() {
             <div className="posts-sidebar">
               <h2>Your Posts</h2>
               <div className="posts-list">
-                {posts.map((post, index) => (
-                  <div
-                    key={index}
-                    className={`post-item ${selectedPostType === post.type ? 'active' : ''}`}
-                    onClick={() => setSelectedPostType(post.type)}
-                  >
-                    <h3>{getRelationshipType(post.type)}</h3>
-                    {post.requirements && (
-                      <p className="post-preview">
-                        {post.requirements.substring(0, 50)}...
-                      </p>
-                    )}
-                  </div>
-                ))}
+                {posts.map((post, index) => {
+                  const requestCount = receivedRequests.filter(request => request.type === post.type).length
+                  return (
+                    <div
+                      key={index}
+                      className={`post-item ${selectedPostType === post.type ? 'active' : ''}`}
+                      onClick={() => setSelectedPostType(post.type)}
+                    >
+                      <div className="post-item-header">
+                        <h3>{getRelationshipType(post.type)}</h3>
+                        {requestCount > 0 && (
+                          <span className="post-item-badge">{requestCount}</span>
+                        )}
+                      </div>
+                      {post.requirements && (
+                        <p className="post-preview">
+                          {post.requirements.substring(0, 50)}...
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
 

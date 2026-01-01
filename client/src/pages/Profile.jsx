@@ -325,7 +325,6 @@ function Profile() {
                 required
                 className="church-select"
               >
-                <option value="">-- Select a church --</option>
                 {churches && churches.map((church) => (
                   <option key={church.id} value={church.name}>
                     {church.name}

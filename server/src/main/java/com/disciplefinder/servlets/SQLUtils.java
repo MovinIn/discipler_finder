@@ -92,7 +92,8 @@ public class SQLUtils {
         .dob(columnOrDefault(() -> rs.getDate("dob"), null))
         .church(columnOrDefault(() -> rs.getString("church"), null))
         .gender(columnOrDefault(() -> rs.getString("gender"), null))
-        .created_at(columnOrDefault(() -> rs.getTimestamp("created_at"), null));
+        .createdAt(columnOrDefault(() -> rs.getTimestamp("created_at"), null))
+        .lastLoginAt(columnOrDefault(() -> rs.getTimestamp("last_login_at"), null));
 
     return profileBuilder.build();
   }

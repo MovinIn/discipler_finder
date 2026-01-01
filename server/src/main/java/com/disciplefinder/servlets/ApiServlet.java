@@ -51,7 +51,7 @@ public class ApiServlet extends HttpServlet {
 
       InputStream input = getClass().getClassLoader().getResourceAsStream("localhost.properties");
       if (input == null) {
-        throw new ServletException("local.properties not found");
+        throw new ServletException("localhost.properties not found");
       }
       Properties props = new Properties();
       props.load(input);
@@ -155,6 +155,8 @@ public class ApiServlet extends HttpServlet {
       case "send_post" -> sendPost(request, response);
       case "accept_request" -> acceptRequest(request, response);
       case "reject_request" -> rejectRequest(request, response);
+      case "get_notifications" -> getNotifications(request, response);
+      case "get_user" -> getUser(request, response);
       default -> {
         JsonResponseUtils.sendJson(response,
             Map.of("message", "Unknown action: " + action),
@@ -176,7 +178,7 @@ public class ApiServlet extends HttpServlet {
 
     executeSQL(conn -> {
       PreparedStatement stmt = conn.prepareStatement(
-          "SELECT id as user_id, password, activated, email, dob, church, gender, created_at, name " +
+          "SELECT id as user_id, password, activated, email, dob, church, gender, created_at, name, last_login_at " +
               "FROM users WHERE email = ?");
       stmt.setString(1, email);
       ResultSet rs = stmt.executeQuery();
@@ -205,16 +207,18 @@ public class ApiServlet extends HttpServlet {
         return;
       }
 
+      int userId = rs.getInt("user_id");
       String sessionID = GenerateCodeUtils.generateCode(15);
 
       PreparedStatement insertStmt = conn.prepareStatement(
           "INSERT INTO codes (user_id, code, type, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL 7 DAY)");
-      insertStmt.setInt(1, rs.getInt("user_id"));
+      insertStmt.setInt(1, userId);
       insertStmt.setString(2, sessionID);
       insertStmt.setString(3, "session");
       insertStmt.executeUpdate();
 
       Profile profile = buildProfileFromResultSet(rs);
+      updateLastLoggedIn(userId);
 
       Map<String, Object> loginResponse = new java.util.HashMap<>();
       loginResponse.put("profile", profile);
@@ -291,7 +295,7 @@ public class ApiServlet extends HttpServlet {
   public static void getChurches(HttpServletRequest request, HttpServletResponse response) throws IOException {
     executeSQL(conn -> {
       PreparedStatement stmt = conn.prepareStatement(
-          "SELECT * FROM churches");
+          "SELECT id, name, address, splash_text, img_code FROM churches");
       ResultSet rs = stmt.executeQuery();
       List<Map<String, Object>> churches = new ArrayList<>();
       while (rs.next()) {
@@ -820,6 +824,30 @@ public class ApiServlet extends HttpServlet {
       deleteStmt.executeUpdate();
       deleteStmt2.executeUpdate();
 
+      PreparedStatement nameStmt = conn.prepareStatement("SELECT id, name FROM users WHERE id IN (?, ?)");
+      nameStmt.setInt(1, id);
+      nameStmt.setInt(2, requesteeId);
+      ResultSet nameRs = nameStmt.executeQuery();
+      
+      String accepterName = null;
+      String requesterName = null;
+      while (nameRs.next()) {
+        int userId = nameRs.getInt("id");
+        String name = nameRs.getString("name");
+        if (userId == id) {
+          accepterName = name;
+        } else if (userId == requesteeId) {
+          requesterName = name;
+        }
+      }
+      nameRs.close();
+      nameStmt.close();
+
+      if (accepterName != null && requesterName != null) {
+        insertNotification(accepterName + " accepted your request.", requesteeId);
+        insertNotification("You accepted " + requesterName + "'s request.", id);
+      }
+
       JsonResponseUtils.sendJson(response, Map.of("message", "Request accepted successfully"));
     }, response);
   }
@@ -830,10 +858,125 @@ public class ApiServlet extends HttpServlet {
     final int requestId = Integer.parseInt(request.getParameter("request_id"));
     SessionPair session = new SessionPair(id, sessionID);
     executeSQL(session, conn -> {
+      PreparedStatement selectStmt = conn.prepareStatement(
+          "SELECT r.requester_id, u2.name as rejecter_name " +
+              "FROM requests r " +
+              "JOIN users u2 ON r.requestee_id = u2.id " +
+              "WHERE r.id = ?");
+      selectStmt.setInt(1, requestId);
+      ResultSet rs = selectStmt.executeQuery();
+      
+      int requesterId = -1;
+      String rejecterName = null;
+      if (rs.next()) {
+        requesterId = rs.getInt("requester_id");
+        rejecterName = rs.getString("rejecter_name");
+      }
+      rs.close();
+      selectStmt.close();
+      
+      if (requesterId == -1) {
+        JsonResponseUtils.sendJson(response, Map.of("message", "Request not found"),
+            HttpServletResponse.SC_NOT_FOUND);
+        return;
+      }
+      
       PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM requests WHERE id = ?");
       deleteStmt.setInt(1, requestId);
       deleteStmt.executeUpdate();
+      
+      if (rejecterName != null) {
+        insertNotification(rejecterName + " rejected your request.", requesterId);
+      }
+      
       JsonResponseUtils.sendJson(response, Map.of("message", "Request rejected successfully"));
+    }, response);
+  }
+
+  public static void insertNotification(String message, int userId) throws SQLException {
+    try (Connection conn = getConnection()) {
+      PreparedStatement stmt = conn
+          .prepareStatement("INSERT INTO notifications (message, user_id, created_at) VALUES (?, ?, NOW())");
+      stmt.setString(1, message);
+      stmt.setInt(2, userId);
+      stmt.executeUpdate();
+    }
+  }
+
+  public static void updateLastLoggedIn(int userId) throws SQLException {
+    try (Connection conn = getConnection()) {
+      PreparedStatement stmt = conn.prepareStatement("UPDATE users SET last_login_at = NOW() WHERE id = ?");
+      stmt.setInt(1, userId);
+      stmt.executeUpdate();
+    }
+  }
+
+  public static void getNotifications(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final int id = Integer.parseInt(request.getParameter("id"));
+    final String sessionID = request.getParameter("session_id");
+    SessionPair session = new SessionPair(id, sessionID);
+    executeSQL(session, conn -> {
+      PreparedStatement stmt = conn.prepareStatement(
+          "SELECT id, message, created_at FROM notifications WHERE user_id = ? " +
+          "AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) " +
+          "ORDER BY created_at DESC");
+      stmt.setInt(1, id);
+      ResultSet rs = stmt.executeQuery();
+      List<Map<String, Object>> notifications = new ArrayList<>();
+      while (rs.next()) {
+        notifications.add(Map.of("id", rs.getInt("id"), "message", rs.getString("message"),
+         "created_at", rs.getTimestamp("created_at")));
+      }
+      JsonResponseUtils.sendJson(response, notifications);
+    }, response);
+  }
+
+  public static void getUser(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    final String sessionID = request.getParameter("session_id");
+
+    if (sessionID == null || sessionID.isEmpty()) {
+      JsonResponseUtils.sendJson(response,
+          Map.of("message", "Session ID is required"),
+          HttpServletResponse.SC_BAD_REQUEST);
+      return;
+    }
+
+    executeSQL(conn -> {
+      PreparedStatement sessionStmt = conn.prepareStatement(
+          "SELECT user_id FROM codes WHERE code = ? AND type = 'session' AND expires_at > NOW()");
+      sessionStmt.setString(1, sessionID);
+      ResultSet sessionRs = sessionStmt.executeQuery();
+
+      if (!sessionRs.next()) {
+        JsonResponseUtils.sendJson(response,
+            Map.of("message", "Invalid or expired session"),
+            HttpServletResponse.SC_UNAUTHORIZED);
+        return;
+      }
+
+      int userId = sessionRs.getInt("user_id");
+
+      PreparedStatement userStmt = conn.prepareStatement(
+          "SELECT id as user_id, email, dob, church, gender, created_at, name, last_login_at " +
+              "FROM users WHERE id = ?");
+      userStmt.setInt(1, userId);
+      ResultSet userRs = userStmt.executeQuery();
+
+      if (!userRs.next()) {
+        JsonResponseUtils.sendJson(response,
+            Map.of("message", "User not found"),
+            HttpServletResponse.SC_NOT_FOUND);
+        return;
+      }
+
+      Profile profile = buildProfileFromResultSet(userRs);
+      updateLastLoggedIn(userId);
+
+      Map<String, Object> userResponse = new java.util.HashMap<>();
+      userResponse.put("profile", profile);
+      userResponse.put("session_id", sessionID);
+
+      JsonResponseUtils.sendJson(response, userResponse);
     }, response);
   }
 }

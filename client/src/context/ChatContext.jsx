@@ -173,7 +173,9 @@ export function ChatProvider({ children }) {
     if (!user || !user.profile || !user.session_id) return
 
     try {
-      const wsUrl = `ws://localhost:8080/ws/chat?id=${user.profile.id}&session_id=${user.session_id}`
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const host = window.location.host.includes('localhost') ? 'localhost:8080' : window.location.host
+      const wsUrl = `${protocol}://${host}/ws/chat?id=${user.profile.id}&session_id=${user.session_id}`
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
@@ -230,6 +232,9 @@ export function ChatProvider({ children }) {
     setIsReconnecting(false)
     setPendingMessages([])
   }
+
+  // Global function to disconnect websocket (accessible from other contexts)
+  window.disconnectChatWebSocket = disconnectWebSocket
 
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = (data) => {
@@ -797,7 +802,8 @@ export function ChatProvider({ children }) {
       loadOlderMessages,
       startTyping,
       stopTyping,
-      resortChats
+      resortChats,
+      disconnectWebSocket
     }}>
       {children}
     </ChatContext.Provider>

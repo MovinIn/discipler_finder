@@ -168,6 +168,7 @@
   border-bottom: 2px solid transparent;
   white-space: nowrap;
   font-size: 0.95rem;
+  position: relative;
 }
 
 .navbar-link:hover {
@@ -195,6 +196,23 @@
 
 .sign-out-btn:hover {
   color: #ff6b6b;
+}
+
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #646cff;
+  color: white;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  margin-left: 0.5rem;
+  vertical-align: middle;
 }
 
 .hamburger {
@@ -249,6 +267,8 @@
 
   .navbar-menu.active {
     max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .navbar-item {
@@ -305,19 +325,48 @@
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
+    padding: 0;
+    margin: 0;
   }
 
   .dropdown-menu.open {
     max-height: 500px;
   }
 
+  .dropdown-menu li {
+    border-bottom: 1px solid #333;
+  }
+
+  .dropdown-menu li:last-child {
+    border-bottom: none;
+  }
+
   .dropdown-link {
-    padding: 1rem 1.5rem 1rem 3rem;
+    padding: 1.2rem 1.5rem;
     border-left: 3px solid transparent;
   }
 
   .dropdown-link.active {
     border-left-color: #646cff;
+    background-color: rgba(100, 108, 255, 0.15);
+  }
+
+  /* Custom scrollbar styling for mobile menu */
+  .navbar-menu.active::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .navbar-menu.active::-webkit-scrollbar-track {
+    background: #1a1a1a;
+  }
+
+  .navbar-menu.active::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+  }
+
+  .navbar-menu.active::-webkit-scrollbar-thumb:hover {
+    background: #555;
   }
 }
 

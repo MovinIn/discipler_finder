@@ -2,6 +2,21 @@
 
 Java Servlet backend for the Discipler Finder application.
 
+## Push Docker Image to Docker Hub
+```
+mvn clean package
+docker build --platform linux/arm64 -t movinin/dfinder_backend:latest .
+docker tag movinin/dfinder_backend:latest movinin/dfinder_backend:latest
+docker push movinin/dfinder_backend:latest
+```
+
+## Run Docker Image
+docker run -d \
+  --replace \
+  --name dfinder_backend \
+  -p 8080:8080 \
+  movinin/dfinder_backend:latest
+
 ## Structure
 
 ```

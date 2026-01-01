@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { FaComments, FaUser } from 'react-icons/fa'
-import { useProfile } from '../context/ProfileContext'
 import { useChat } from '../context/ChatContext'
 import { useRequests } from '../context/RequestsContext'
 import { useAuth } from '../context/AuthContext'
@@ -8,21 +7,17 @@ import './SentRequests.css'
 
 function SentRequests() {
   const navigate = useNavigate()
-  const { profile } = useProfile()
   const { addChat, getChatByUserId } = useChat()
   const { sentRequests, loading } = useRequests()
   const { user, isLoggedIn, loading: authLoading } = useAuth()
 
-  const getRelationshipType = () => {
-    // Based on user's own preference when they sent the request
-    // If user wants to disciple, they're requesting to be a Mentor
-    // If user wants to be discipled, they're requesting to be a Disciple
-    // If user wants accountability, they're requesting to be an Accountability Partner
-    if (profile.preference === 'disciple') {
+  const getRelationshipType = (requestType) => {
+    // Map request type from API ('M', 'D', 'A') to relationship type string
+    if (requestType === 'M') {
       return 'Mentor'
-    } else if (profile.preference === 'be-discipled') {
+    } else if (requestType === 'D') {
       return 'Disciple'
-    } else if (profile.preference === 'accountability') {
+    } else if (requestType === 'A') {
       return 'Accountability Partner'
     }
     return 'Mentor' // Default
@@ -67,7 +62,7 @@ function SentRequests() {
               lastMessage: 'Chat started',
               lastMessageTime: 'Just now',
               unreadCount: 0,
-              relationshipType: getRelationshipType()
+              relationshipType: getRelationshipType(request.type)
             }
             addChat(newChat)
             // Navigate using the real chat's id
@@ -140,7 +135,7 @@ function SentRequests() {
                   
                   <div className="request-details">
                     <p className="relationship-type">
-                      You requested to be {getRelationshipType().startsWith('A') ? 'an' : 'a'} <span className="type-value">{getRelationshipType()}</span>
+                      You requested to be {getRelationshipType(request.type).startsWith('A') ? 'an' : 'a'} <span className="type-value">{getRelationshipType(request.type)}</span>
                     </p>
                     {request.message && (
                       <div className="request-message">
